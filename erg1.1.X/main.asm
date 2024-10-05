@@ -39,8 +39,7 @@ repeat_one:		; ! 4 cycles (last 3 + 5 = 8 cycles) !
     nop			; 1 cycle
     brne repeat_one	; 1 or 2 cycles
     
-    nop			; 1 cycle (this can be avoided and make the repeat_x
-			; loop cost 1003 cycles instead of 1004
+    nop			; 1 cycle
     ret			; 4 cycles
 
 finish:
