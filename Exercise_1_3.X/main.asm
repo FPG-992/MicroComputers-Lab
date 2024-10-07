@@ -35,7 +35,9 @@ START: ;THIS IS EXECUTED ONLY ONE TIME
     OUT PORTD,POS ;output position
     CALL DELAY
     CALL DELAY
+
     
+    SET
 RJMP TO_LEFT
 
 ;==========================================================
@@ -47,6 +49,8 @@ TO_LEFT:
     OUT PORTD,POS ;output position
     CALL DELAY ; 1s delay
     SBRC POS,7; SKIP IF 7NTH BIT IS 0
+    CLT
+    SBRC POS,7; SKIP IF 7NTH BIT IS 0
     RJMP CHANGE_DIRECTION ;Change_direction
 
     RJMP TO_LEFT
@@ -56,6 +60,8 @@ TO_RIGHT:
     OUT PORTD,POS ;output position
     CALL DELAY ; 1s delay
     SBRC POS,0; SKIP IF 0TH BIT IS 0
+    SET
+    SBRC POS,0; SKIP IF 0TH BIT IS 0
     RJMP CHANGE_DIRECTION ;Change_direction
 
     RJMP TO_RIGHT
@@ -63,7 +69,7 @@ TO_RIGHT:
 
 CHANGE_DIRECTION:
     CALL DELAY ;1 MORE SECOND 
-    SBRC POS,7 ;IF 7NTH BIT IS 1
+    SBRC POS,7 ; SKIP IF BIT IN REGISTER IS CLEARED
     RJMP TO_RIGHT ;THEN JMP TO RIGHT
     RJMP TO_LEFT 
         
