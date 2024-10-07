@@ -8,6 +8,10 @@
 .def TEMP=r30
 .def POS=r31
 
+;==========================================================
+; Initialization
+;==========================================================
+
 ldi POS,1
     
 clr temp
@@ -22,41 +26,53 @@ reset:
     out SPH, r24
     ldi r24, low(F1)
     ldi r25, high(F1)
-    
+
+;==========================================================
+; Program's Funcionality Start
+;==========================================================
+
 START: ;THIS IS EXECUTED ONLY ONE TIME
-OUT PORTD,POS ;output position
-CALL DELAY
-CALL DELAY
+    OUT PORTD,POS ;output position
+    CALL DELAY
+    CALL DELAY
     
 RJMP TO_LEFT
+
+;==========================================================
+; Main Program Loop
+;==========================================================
 
 TO_LEFT:
-LSL POS ;SHIFT LEFT
-OUT PORTD,POS ;output position
-CALL DELAY ; 1s delay
-CALL DELAY ; 1s delay
-SBRC POS,7; SKIP IF 7NTH BIT IS 0
-RJMP CHANGE_DIRECTION ;Change_direction
+    LSL POS ;SHIFT LEFT
+    OUT PORTD,POS ;output position
+    CALL DELAY ; 1s delay
+    CALL DELAY ; 1s delay
+    SBRC POS,7; SKIP IF 7NTH BIT IS 0
+    RJMP CHANGE_DIRECTION ;Change_direction
 
-RJMP TO_LEFT
+    RJMP TO_LEFT
     
 TO_RIGHT:
-LSR POS ;SHIFT LEFT
-OUT PORTD,POS ;output position
-CALL DELAY ; 1s delay
-CALL DELAY ; 1s delay
-SBRC POS,0; SKIP IF 0TH BIT IS 0
-RJMP CHANGE_DIRECTION ;Change_direction
+    LSR POS ;SHIFT LEFT
+    OUT PORTD,POS ;output position
+    CALL DELAY ; 1s delay
+    CALL DELAY ; 1s delay
+    SBRC POS,0; SKIP IF 0TH BIT IS 0
+    RJMP CHANGE_DIRECTION ;Change_direction
 
-RJMP TO_RIGHT
+    RJMP TO_RIGHT
 
 
 CHANGE_DIRECTION:
-CALL DELAY ;1 MORE SECOND 
-SBRC POS,7 ;IF 7NTH BIT IS 1
-RJMP TO_RIGHT ;THEN JMP TO RIGHT
-RJMP TO_LEFT 
+    CALL DELAY ;1 MORE SECOND 
+    SBRC POS,7 ;IF 7NTH BIT IS 1
+    RJMP TO_RIGHT ;THEN JMP TO RIGHT
+    RJMP TO_LEFT 
         
+
+;==========================================================
+; Delay Subroutine
+;==========================================================
     
 DELAY:
 wait_x_msec:
