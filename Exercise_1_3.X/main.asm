@@ -46,7 +46,6 @@ TO_LEFT:
     LSL POS ;SHIFT LEFT
     OUT PORTD,POS ;output position
     CALL DELAY ; 1s delay
-    CALL DELAY ; 1s delay
     SBRC POS,7; SKIP IF 7NTH BIT IS 0
     RJMP CHANGE_DIRECTION ;Change_direction
 
@@ -55,7 +54,6 @@ TO_LEFT:
 TO_RIGHT:
     LSR POS ;SHIFT LEFT
     OUT PORTD,POS ;output position
-    CALL DELAY ; 1s delay
     CALL DELAY ; 1s delay
     SBRC POS,0; SKIP IF 0TH BIT IS 0
     RJMP CHANGE_DIRECTION ;Change_direction
