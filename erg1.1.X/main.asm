@@ -1,7 +1,7 @@
 .include "m328PBdef.inc"
 
 .equ FOSC_MHZ=16
-.equ DEL_mS=10000
+.equ DEL_mS=1000
 .equ F1=FOSC_MHZ*DEL_mS
 
 reset:
