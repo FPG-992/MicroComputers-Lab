@@ -43,6 +43,7 @@ start:
     cpi count,0
     brne check1
     
+    clr updated
     clr r28
     out PORTB, r28
     rjmp end
