@@ -55,7 +55,7 @@ push r25 ; save r23, r24, 25, SREG to stack
 
 ;program starts here;
 in r16,PIND
-andi r16,0b00100000 ;if bit is set dont count
+andi r16,0x20 ;if bit (PD5) is set dont count
 breq skip_next
     
 ;increase count and show   
