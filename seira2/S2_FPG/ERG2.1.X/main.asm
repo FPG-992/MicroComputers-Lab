@@ -2,11 +2,15 @@
 
 .equ FOSC_MHZ=16              ; Microcontroller operating frequency in MHz
 
-.equ DEL_mS=500              ; Delay in mS (valid number from 1 to 4095)
+.equ DEL_mS=500      ; Delay in mS (valid number from 1 to 4095)
+
+.equ DEL_Five_mS=500      ; Delay in mS (valid number from 1 to 4095)
 
 .equ DEL_NU=FOSC_MHZ*DEL_mS   ; Delay_mS routine: (1000*DEL_NU+6) cycles
 
 .def counter = r30
+
+.equ F1=FOSC_MHZ*DEL_mS
 
 .org 0x0 ; Start the code at address 0x0
 rjmp reset
@@ -74,7 +78,7 @@ brne delay_mS                 ; 1 or 2 cycles
 
 ret                            ; 4 cycles
 
-==== DELAY FUNCTION ENDS HERE ====
+;==== DELAY FUNCTION ENDS HERE ====
 
 
 
@@ -125,3 +129,31 @@ reti
 ;===============
 ;ISR1 ENDS HERE
 ;===============
+
+;==== SECOND DELAY FUNCTION STARTS HERE ====
+
+wait_x_msec:
+    push r23		; 2 cycles
+    push r24		; 2 cycles
+    push r25		; 2 cycles
+repeat_x:		; ! (x-1) * (996 + 2 + 2) + 996 + 2 + 1 + 10 = 1000 * x + 13 - 1 = 1000*x + 12 !
+    rcall wait_one_msec	; 3 + 993 = 996 cycles
+    sbiw r24,1		; 2 cycles
+    brne repeat_x	; 1 or 2 cycles
+    
+    pop r25		; 2 cycles
+    pop	r24		; 2 cycles
+    pop r23		; 2 cycles
+    ret			; 4 cycles
+
+wait_one_msec:		; ! 246 * 4 + 8 + 1 = 993 cycles * 
+    ldi	r23, 247	; 1 cycle
+repeat_one:		; ! 4 cycles (last 3 + 5 = 8 cycles) !
+    dec r23		; 1 cycle
+    nop			; 1 cycle
+    brne repeat_one	; 1 or 2 cycles
+    
+    nop			; 1 cycle
+    ret			; 4 cycles
+
+;==== SECOND DELAY FUNCTION ENDS HERE ====
