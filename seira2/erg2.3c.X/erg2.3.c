@@ -35,11 +35,11 @@ int main(void) {
     
     while (1) {
         if (counter > 4500 && update == 1) {
-            PORTC = 0xFF;
+            PORTB = 0x00111111;
             _delay_ms(1);
             counter--;
         } else if (counter > 0) {
-            PORTC = 0x01;
+            PORTB = 0x01;
             _delay_ms(1);
             counter--;
         } else {
