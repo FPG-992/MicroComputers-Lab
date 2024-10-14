@@ -2,9 +2,9 @@
 
 .equ FOSC_MHZ=16              ; Microcontroller operating frequency in MHz
 
-.equ DEL_mS=500      ; Delay in mS (valid number from 1 to 4095)
+.equ DEL_mS=50      ; Delay in mS (valid number from 1 to 4095)
 
-.equ DEL_Five_mS=500      ; Delay in mS (valid number from 1 to 4095)
+.equ DEL_Five_mS=50      ; Delay in mS (valid number from 1 to 4095)
 
 .equ DEL_NU=FOSC_MHZ*DEL_mS   ; Delay_mS routine: (1000*DEL_NU+6) cycles
 
@@ -18,22 +18,24 @@ rjmp reset
 .org 0x4 ; Interrupt vector for INT1
 rjmp isr1
 
+clr counter
+
 reset:
 ; Init Stack Pointer
 ldi r24, LOW(RAMEND)
-ldi r24, HIGH(RAMEND)
 out SPL, r24
+ldi r24, HIGH(RAMEND)
 out SPH, r24
 
-; Init PORTB as output
+; Init Port B as output
 ldi r26, 0xFF
 out DDRB, r26
 
-; Init port D as input
+; Init Port D as input
 ldi r26, 0x00
 out DDRD, r26
 
-; Init port c as output
+; Init Port C as output
 ldi r26, 0xFF
 out DDRC, r26
 
@@ -41,14 +43,13 @@ out DDRC, r26
 
 ldi r24, (1<<ISC11) | (1<<ISC10)
 sts EICRA, r24
-
-;enable INT1 interrupt (EXETERNAL!!!)
+;enable INT1 interrupt (EXTERNAL!!!)
 ldi r24, (1<<INT1)
 out EIMSK, r24
 
 sei ;enable global interrupts
 
-out PORTC, counter ;show counter in leds
+out PORTC,counter ;show counter in leds
 
 ;==== Delay FUNCTION STARTS HERE ====
 
@@ -99,6 +100,21 @@ in r25, SREG
 push r25 ; save r23, r24, 25, SREG to stack
 
 ;code to solve the debouncing issue for the button
+debouncing:
+ldi r24, (1 << INTF1) ; Clear INT F1 flag
+out EIFR, r24
+
+;DELAY 5MS
+ldi r24, 81        ; Delay count
+clr r25            ; High byte zero
+rcall wait_x_msec
+;END OF DELAY
+
+in r17, EIFR    ; Read EIFR
+sbrc r17, INTF1  ; Check if INTF1 is set
+rjmp debouncing  ; If not, jump to debouncing
+
+
 
 ;program starts here;
 in r16,PIND
