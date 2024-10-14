@@ -7,6 +7,7 @@
 
 .equ DEL_NU=FOSC_MHZ*DEL_mS   ; Delay_mS routine: (1000*DEL_NU+6) cycles
 
+.def counter = r30
 
 .org 0x0 ; Start the code at address 0x0
 rjmp reset
@@ -25,6 +26,14 @@ out SPH, r24
 ldi r26, 0xFF
 out DDRB, r26
 
+; Init port D as input
+ldi r26, 0x00
+out DDRD, r26
+
+; Init port c as output
+ldi r26, 0xFF
+out DDRC, r26
+
 ;interrupt on rising edge of INT1 pin
 
 ldi r24, (1<<ISC11) | (1<<ISC10)
@@ -35,6 +44,8 @@ ldi r24, (1<<INT1)
 out EIMSK, r24
 
 sei ;enable global interrupts
+
+out PORTC, counter ;show counter in leds
 
 
 ;======
@@ -52,6 +63,8 @@ push r25
 
 in r25, SREG
 push r25 ; save r23, r24, 25, SREG to stack
+
+;code to solve the debouncing issue for the button
 
 ;program starts here;
 in r16,PIND
