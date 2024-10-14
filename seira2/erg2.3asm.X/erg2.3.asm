@@ -64,7 +64,7 @@ check2:
     out PORTB,r28
     rjmp decrement
     
-noupdated:
+displayAll:
     ser r28
     out PORTB,r28
     
@@ -72,7 +72,7 @@ decrement:
     dec count    
 end:
     rcall wait_x_msec
-    rjmp main    
+    rjmp start    
    
 ISR1:
     push r23
