@@ -21,8 +21,8 @@ reset:
     ldi r24, HIGH(RAMEND)
     out SPH, r24
     
-    ; Set PORTB as output
-    ser r24
+    ; Set PORTB as input
+    clr r24
     out DDRB,r24
     
     ; Set PORTC as output
@@ -30,7 +30,7 @@ reset:
     out DDRC,r24
     
     ; Setup interrupts
-    ldi r24,(1 << ISC01) | (1 << ISC00)
+    ldi r24,(1 << ISC01) | (0 << ISC00)
     sts EICRA,r24
     
     ldi r24, (1 << INT0)
@@ -67,13 +67,13 @@ ISR0:
     ldi r25, high(F2)
     
 repeat:
-    ldi r23,(1<<INTF1)
+    ldi r23,(1<<INTF0)
     out EIFR,r23
     
     rcall wait_x_msec
     
     in r23,EIFR
-    sbrc r23,INTF1 ; 0 for INT0 1 for INT1???
+    sbrc r23,INTF0 ; 0 for INT0 1 for INT1???
     rjmp repeat
     
     ; Collect PORTB input
@@ -82,8 +82,8 @@ repeat:
     in r23, PINB
     
     clr r24
-    
-    ; If PB0 = 1 (pressed), skip to finish
+        
+    ; If PB0 = 1 (unpressed), skip to next
     sbrc r23,0
     rjmp second
     ori r24,1
@@ -109,6 +109,11 @@ fourth:
     
 finish:
     out PORTC, r24
+    
+    ldi r24,low(16*500)
+    ldi r25,high(16*500)
+    
+    rcall wait_x_msec
     
     pop r24
     out SREG,r24
