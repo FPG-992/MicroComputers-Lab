@@ -94,7 +94,7 @@ ldi r24, low(F4) ; Set delay (number of cycles)
 ldi r25, high(F4) ; Set delay (number of cycles)
 rcall wait_x_msec ;END OF DELAY
 ;return to main loop
-rjmp Main_Loop
+reti
 
 
 DELAY_FIVE_S: ;DELAY 5000MS
