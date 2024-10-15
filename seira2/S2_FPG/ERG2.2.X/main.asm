@@ -1,10 +1,14 @@
 .include "m328PBdef.inc"        ; ATmega328P microcontroller definitions
 
-.equ FOSC_MHZ=16               ; Microcontroller operating frequency in MHz
-.equ DEL_mS=20               ; Delay in mS (valid number from 1 to 4095)
+.equ FOSC_MHZ=16
+.equ DEL_mS=500
+.equ DEL_INT_ms=5
+.equ F1=FOSC_MHZ*DEL_mS
+.equ F2=FOSC_MHZ*DEL_INT_ms
 .equ DEL_NU=FOSC_MHZ*DEL_mS    ; delay_mS routine: (1000*DEL_NU+6) cycles
 
 .def counter = r30
+.def count = r26
 
 .org 0x0
     rjmp reset
@@ -30,24 +34,24 @@ out EIMSK,r24
 sei ;Enable Global Interrupts Flag
 
 ; Init PORTC as output
-ser r26
-out DDRC, r26
+ser r20
+out DDRC, r20
 
 ; Init PortB as Input
-clr r26
-out DDRB, r26
+clr r20
+out DDRB, r20
 
 loop1:
-clr r26
+clr count
 loop2:
-out PORTC, r26
+out PORTC, count
 
 ldi r24, low(DEL_NU)           ; Set delay (number of cycles)
 ldi r25, high(DEL_NU)
 rcall delay_mS
 
-inc r26
-cpi r26, 32                    ; Compare r26 with 32
+inc count
+cpi count, 32                    ; Compare count with 32
 breq loop1
 rjmp loop2
 
@@ -72,6 +76,22 @@ push r24
 push r25
 in r24, SREG
 push r24
+
+;code to solve the debouncing issue for the button
+debouncing:
+ldi r24, (1 << INTF1) ; Clear INT F1 flag
+out EIFR, r24
+
+;DELAY 5MS
+ldi r24, low(F2) ; Set delay (number of cycles)
+ldi r25, high(F2)
+
+rcall wait_x_msec
+;END OF DELAY
+
+in r17, EIFR    ; Read EIFR
+sbrc r17, INTF1  ; Check if INTF1 is set
+rjmp debouncing  ; If not, jump to debouncing
 
 ;Main Code
 in r20,PINB ;read PORTB pins to r20
@@ -102,3 +122,35 @@ out SREG, r24
 pop r25
 
 reti
+
+;===============
+;ISR0 ENDS HERE
+;===============
+
+;==== SECOND DELAY FUNCTION STARTS HERE ====
+
+wait_x_msec:
+    push r23		; 2 cycles
+    push r24		; 2 cycles
+    push r25		; 2 cycles
+repeat_x:		; ! (x-1) * (996 + 2 + 2) + 996 + 2 + 1 + 10 = 1000 * x + 13 - 1 = 1000*x + 12 !
+    rcall wait_one_msec	; 3 + 993 = 996 cycles
+    sbiw r24,1		; 2 cycles
+    brne repeat_x	; 1 or 2 cycles
+    
+    pop r25		; 2 cycles
+    pop	r24		; 2 cycles
+    pop r23		; 2 cycles
+    ret			; 4 cycles
+
+wait_one_msec:		; ! 246 * 4 + 8 + 1 = 993 cycles * 
+    ldi	r23, 247	; 1 cycle
+repeat_one:		; ! 4 cycles (last 3 + 5 = 8 cycles) !
+    dec r23		; 1 cycle
+    nop			; 1 cycle
+    brne repeat_one	; 1 or 2 cycles
+    
+    nop			; 1 cycle
+    ret			; 4 cycles
+
+;==== SECOND DELAY FUNCTION ENDS HERE ====
