@@ -93,16 +93,20 @@ out PORTB, leds ;FLASH LEDS
 ldi r24, low(F4) ; Set delay (number of cycles)
 ldi r25, high(F4) ; Set delay (number of cycles)
 rcall wait_x_msec ;END OF DELAY
-;return to main loop
-reti
+;Finished flashing LEDs, go back to the beginning
+pop r25
+out SREG, r25
+pop r25
+pop r24
+pop r23 ; Retrieve r23, r24, 25, SREG from stack
 
+reti
 
 DELAY_FIVE_S: ;DELAY 5000MS
 ldi INT_ONE_FLAG, 1 ; Set INT_ONE_FLAG
 ldi r24, low(F1) ; Set delay (number of cycles)
 ldi r25, high(F1)
 rcall wait_x_msec   ;END OF DELAY
-
 
 ;=Main program ends here=
 
