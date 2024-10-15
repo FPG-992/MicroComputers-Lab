@@ -38,7 +38,6 @@ ldi r20, 0xFF
 out DDRC, r20
 
 ;interrupt on rising edge of INT1 pin
-
 ldi r24, (1<<ISC11) | (1<<ISC10)
 sts EICRA, r24
 
