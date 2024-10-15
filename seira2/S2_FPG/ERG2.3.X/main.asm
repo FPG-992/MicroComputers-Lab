@@ -3,8 +3,14 @@
 .equ FOSC_MHZ=16
 .equ DEL_mS=5000
 .equ DEL_INT_ms=5
+.equ DEL_ALL_LEDS=500
+.equ DEL_FOR_ONE_LED=4500
 .equ F1=FOSC_MHZ*DEL_mS
 .equ F2=FOSC_MHZ*DEL_INT_ms
+.equ F3=FOSC_MHZ*DEL_ALL_LEDS
+.equ F4=FOSC_MHZ*DEL_FOR_ONE_LED
+
+.def INT_ONE_FLAG = r29
 
 .def leds = r21
 
@@ -38,6 +44,7 @@ sei ;enable global interrupts
 Main_Loop:
 clr leds
 out PORTB, leds
+ldi INT_ONE_FLAG, 0 ; Clear INT_ONE_FLAG
 rjmp Main_Loop
 
 
@@ -69,13 +76,32 @@ rjmp debouncing  ; If not, jump to debouncing
 ldi leds, 0x01 ;LOAD VALUE FOR PB0
 out PORTB, leds ;FLASH LEDS
 
-;DELAY 5000MS
+ldi r24, (1 << INTF1) 
+out EIFR, r24 ; Clear external interrupt 1 flag
+
+cpi INT_ONE_FLAG, 0 ; Check INT_ONE_FLAG
+breq DELAY_FIVE_S ; If INT_ONE_FLAG is 0, delay 5000ms - Base Case
+
+Delay_500ms:
+ldi r24, low(F3) ; Set delay (number of cycles)
+ldi r25, high(F3) ; Set delay (number of cycles)
+rcall wait_x_msec ;END OF DELAY
+
+Delay_4500ms:
+ldi leds,0x3F ;LOAD VALUE FOR PB0-PB5
+out PORTB, leds ;FLASH LEDS
+ldi r24, low(F4) ; Set delay (number of cycles)
+ldi r25, high(F4) ; Set delay (number of cycles)
+rcall wait_x_msec ;END OF DELAY
+;return to main loop
+rjmp Main_Loop
+
+
+DELAY_FIVE_S: ;DELAY 5000MS
+ldi INT_ONE_FLAG, 1 ; Set INT_ONE_FLAG
 ldi r24, low(F1) ; Set delay (number of cycles)
 ldi r25, high(F1)
 rcall wait_x_msec   ;END OF DELAY
-
-ldi leds, 0x00 ;LOAD VALUE FOR ALL LEDS OFF
-out PORTB, leds ;TURN OFF LEDS
 
 
 ;=Main program ends here=
