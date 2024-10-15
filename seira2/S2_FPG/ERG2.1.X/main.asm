@@ -1,16 +1,14 @@
 .include "m328PBdef.inc"      ; ATmega328P microcontroller definitions
 
-.equ FOSC_MHZ=16              ; Microcontroller operating frequency in MHz
-
-.equ DEL_mS=50      ; Delay in mS (valid number from 1 to 4095)
-
-.equ DEL_Five_mS=50      ; Delay in mS (valid number from 1 to 4095)
-
-.equ DEL_NU=FOSC_MHZ*DEL_mS   ; Delay_mS routine: (1000*DEL_NU+6) cycles
+.equ FOSC_MHZ=16
+.equ DEL_mS=500
+.equ DEL_INT_ms=5
+.equ F1=FOSC_MHZ*DEL_mS
+.equ F2=FOSC_MHZ*DEL_INT_ms
+.equ DEL_NU=FOSC_MHZ*DEL_mS    ; delay_mS routine: (1000*DEL_NU+6) cycles
 
 .def counter = r30
-
-.equ F1=FOSC_MHZ*DEL_mS
+.def count = r26
 
 .org 0x0 ; Start the code at address 0x0
 rjmp reset
@@ -28,21 +26,22 @@ ldi r24, HIGH(RAMEND)
 out SPH, r24
 
 ; Init Port B as output
-ldi r26, 0xFF
-out DDRB, r26
+ldi r20, 0xFF
+out DDRB, r20
 
 ; Init Port D as input
-ldi r26, 0x00
-out DDRD, r26
+ldi r20, 0x00
+out DDRD, r20
 
 ; Init Port C as output
-ldi r26, 0xFF
-out DDRC, r26
+ldi r20, 0xFF
+out DDRC, r20
 
 ;interrupt on rising edge of INT1 pin
 
 ldi r24, (1<<ISC11) | (1<<ISC10)
 sts EICRA, r24
+
 ;enable INT1 interrupt (EXTERNAL!!!)
 ldi r24, (1<<INT1)
 out EIMSK, r24
@@ -54,16 +53,20 @@ out PORTC,counter ;show counter in leds
 ;==== Delay FUNCTION STARTS HERE ====
 
 loop1:
-clr r26
+    clr count
 loop2:
-out PORTB, r26
-ldi r24, low(DEL_NU)          ; Set delay (number of cycles)
-ldi r25, high(DEL_NU)
-rcall delay_mS
-inc r26
-cpi r26, 16                   ; Compare r26 with 16
-breq loop1
-rjmp loop2
+    out PORTB, count
+
+    ldi r24, low(DEL_NU)          ; Set delay (number of cycles)
+    ldi r25, high(DEL_NU)
+
+    rcall delay_mS
+
+    inc count
+
+    cpi count, 16                   ; Compare count with 16
+    breq loop1
+    rjmp loop2
 
 
 ; Delay of 1000*F1+6 cycles (almost equal to 1000*F1 cycles)
@@ -105,8 +108,9 @@ ldi r24, (1 << INTF1) ; Clear INT F1 flag
 out EIFR, r24
 
 ;DELAY 5MS
-ldi r24, 81        ; Delay count
-clr r25            ; High byte zero
+ldi r24, low(F2) ; Set delay (number of cycles)
+ldi r25, high(F2)
+
 rcall wait_x_msec
 ;END OF DELAY
 
