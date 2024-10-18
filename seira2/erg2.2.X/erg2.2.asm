@@ -73,7 +73,7 @@ repeat:
     rcall wait_x_msec
     
     in r23,EIFR
-    sbrc r23,INTF0 ; 0 for INT0 1 for INT1???
+    sbrc r23,INTF0
     rjmp repeat
     
     ; Collect PORTB input
