@@ -24,7 +24,7 @@ reset:
     sts TCCR1A, r24
     
     ; Also load CLK/256 configuration (16MHz / 256 = 62500Hz)
-    ldi r24, (0<<WGM13) | (1<<WGM12) | (1<<CS12) | (0<<CS11) | (0<<CS10)
+    ldi r24, (0<<WGM13) | (1<<WGM12) | (0<<CS12) | (0<<CS11) | (1<<CS10)
     sts TCCR1B, r24
     
     ; Set PORTB outputs
