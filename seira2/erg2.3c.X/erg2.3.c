@@ -7,12 +7,10 @@ int counter;
 char update;
 
 ISR(INT1_vect) {
-//    Repeated check
-//
-//    do {
-//        EIFR = (1<<INTF1);
-//        _delay_ms(5);
-//    } while ((EIFR && 1<<INTF1) != 0);
+    do {
+        EIFR = (1<<INTF1);
+        _delay_ms(5);
+    } while ((EIFR && 1<<INTF1) != 0);
     
     if (counter != 0) {
         update = 1;
@@ -35,7 +33,7 @@ int main(void) {
     
     while (1) {
         if (counter > 4500 && update == 1) {
-            PORTB = 0x00111111;
+            PORTB = 0b00111111;
             _delay_ms(1);
             counter--;
         } else if (counter > 0) {

@@ -45,7 +45,7 @@ reset:
     
     ; Setup INT1 counter
     clr countINT
-    out PORTC, countINT     ; It's possible it needs to be in the loop
+    out PORTC, countINT
     
     ; Load delay to r24-r25
     ldi r24, low(F1)
@@ -82,7 +82,7 @@ repeat:
     rcall wait_x_msec
     
     in r23,EIFR
-    sbrc r23,INTF1 ; 0 for INT0 1 for INT1???
+    sbrc r23,INTF1
     rjmp repeat
     
     ; Collect PORTD input
