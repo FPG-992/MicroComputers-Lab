@@ -3,6 +3,10 @@
 .def DC_VALUE=r20
 .def TablePointer=r21
     
+.equ FOSC_MHZ=16
+.equ DEL_mS=10
+.equ F1=FOSC_MHZ*DEL_mS
+    
 .org 0x0
     rjmp reset
     
@@ -27,10 +31,6 @@ reset:
     ldi r24, 0b00111111
     out DDRB, r24
     
-    ; !TEMP!
-    ser r24
-    out DDRC, r24
-    
     ; Set PORTD as input
     clr r24
     out DDRD,r24
@@ -48,7 +48,6 @@ reset:
         
     ; Write DC_VALUE to OCR1A
     sts OCR1AL, DC_VALUE
-    out PORTC, DC_VALUE
     
 main:
     ; Read PORTD
@@ -65,8 +64,14 @@ main:
     rjmp main
     
 handleInc:
+    rcall wait_x_msec
+    in r24, PIND
+    
+    cpi r24, 0xFF
+    brne handleInc
+    
     cpi TablePointer, 12
-    breq freeze
+    breq main
     
     inc TablePointer
     
@@ -77,13 +82,18 @@ handleInc:
     lpm DC_VALUE, Z
     
     sts OCR1AL, DC_VALUE
-    out PORTC, DC_VALUE
     
-    rjmp freeze
+    rjmp main
     
 handleDec:
+    rcall wait_x_msec
+    in r24, PIND
+    
+    cpi r24, 0xFF
+    brne handleDec
+    
     cpi TablePointer, 0
-    breq freeze
+    breq main
     
     dec TablePointer
     
@@ -94,12 +104,29 @@ handleDec:
     lpm DC_VALUE, Z
     
     sts OCR1AL, DC_VALUE
-    out PORTC, DC_VALUE
     
-; Freezes further execution until all PORTD buttons are unpressed
-freeze:
-    in r24, PIND
-    
-    cpi r24, 0xFF
-    brne freeze
     rjmp main
+    
+wait_x_msec:
+    push r23
+    push r24
+    push r25
+repeat_x:
+    rcall wait_one_msec
+    sbiw r24,1
+    brne repeat_x
+    
+    pop r25
+    pop	r24
+    pop r23
+    ret
+
+wait_one_msec:
+    ldi	r23, 247
+repeat_one:
+    dec r23
+    nop
+    brne repeat_one
+    
+    nop
+    ret
