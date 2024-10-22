@@ -38,23 +38,19 @@ int main(void) {
         } else {
             temp = PIND;
             if ((temp & (1<<PIND3)) == 0) {
-                _delay_ms(5);
-                while ((PIND & (1<<PIND3)) == 0) {
-                    _delay_ms(5);
-                }
                 if (index < 12) {
                     index++;
                     OCR1AL = DC_VALUE[index];
                 }
+                while ((PIND & (1<<PIND3)) == 0);
+                _delay_ms(50);
             } else if ((temp & (1<<PIND4)) == 0) {
-                _delay_ms(5);
-                while ((PIND & (1<<PIND4)) == 0) {
-                    _delay_ms(5);
-                }
                 if (index > 0) {
                     index--;
                     OCR1AL = DC_VALUE[index];
                 }
+                while ((PIND & (1<<PIND4)) == 0);
+                _delay_ms(50);
             }
         }
         temp = PIND;

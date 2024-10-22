@@ -75,23 +75,21 @@ int main(void) {
     while (1) {
         unsigned char temp = PINB;
         if ((temp & (1<<PINB5)) == 0) {
-            _delay_ms(5);
-            while ((PINB & (1<<PINB5)) == 0) {
-                _delay_ms(5);
-            }
             if (index < 12) {
                 index++;
                 OCR1AL = DC_VALUE[index];
             }
+            
+            while ((PINB & (1<<PINB5)) == 0);
+            _delay_ms(50);
         } else if ((temp & (1<<PINB4)) == 0) {
-            _delay_ms(5);
-            while ((PINB & (1<<PINB4)) == 0) {
-                _delay_ms(5);
-            }
             if (index > 0) {
                 index--;
                 OCR1AL = DC_VALUE[index];
             }
+            
+            while ((PINB & (1<<PINB4)) == 0);
+            _delay_ms(50);
         }
     }
 }
