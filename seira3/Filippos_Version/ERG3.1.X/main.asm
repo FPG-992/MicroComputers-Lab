@@ -77,7 +77,7 @@ DT_increase:
     rjmp main
 
 DT_decrease:
-    ; we will implement a solution for debouncing
+    ; we implement a solution for debouncing
     rcall wait_x_msec
     in r24, PIND 
     cpi r24, 0xFF ;are all buttons unpressed?
