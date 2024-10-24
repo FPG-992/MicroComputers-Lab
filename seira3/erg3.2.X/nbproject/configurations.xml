@@ -166,6 +166,11 @@
         <property key="user-pack-device-support" value=""/>
         <property key="wpo-lto" value="false"/>
       </XC8-config-global>
+      <mEdbgTool>
+        <property key="memories.programmemory.ranges" value="0-3fff"/>
+        <property key="programmerToGoFilePath"
+                  value="C:/Users/chris/Desktop/UNI/ergmicro/seira3/erg3.2.X/debug/default/erg3.2_ptg"/>
+      </mEdbgTool>
     </conf>
   </confs>
 </configurationDescriptor>

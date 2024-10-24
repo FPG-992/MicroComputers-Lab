@@ -23,7 +23,7 @@ ISR(TIMER3_COMPA_vect) {
     
     read = sum>>4;
     
-    unsigned char temp = 0x00;
+    unsigned char temp = 0b11000000;
     
     if (read >= 0 && read <= 200) {
         temp |= 1;
@@ -61,10 +61,11 @@ int main(void) {
     OCR3A = 24999;
     TIMSK3 = (1<<OCIE3A);
     
-    DDRB |= 0b00001111;
+    DDRB |= 0b00111111;
     
     // set PORTD to an output
-    DDRD = 0b11111111;
+    DDRD = 0b00111111;
+    PORTD = 0b11000000;
     
     // Setup ADC
     ADMUX = (1<<REFS0) | (1<<MUX0);
@@ -73,23 +74,25 @@ int main(void) {
     sei();
     
     while (1) {
-        unsigned char temp = PINB;
-        if ((temp & (1<<PINB5)) == 0) {
+        unsigned char temp = PIND;
+        if (!(temp & (1<<PIND6))) {
             if (index < 12) {
                 index++;
                 OCR1AL = DC_VALUE[index];
             }
             
-            while ((PINB & (1<<PINB5)) == 0);
-            _delay_ms(50);
-        } else if ((temp & (1<<PINB4)) == 0) {
+            while (!(PIND & (1<<PIND6))) {
+                _delay_ms(10);
+            }
+        } else if (!(temp & (1<<PIND7))) {
             if (index > 0) {
                 index--;
                 OCR1AL = DC_VALUE[index];
             }
             
-            while ((PINB & (1<<PINB4)) == 0);
-            _delay_ms(50);
+            while (!(PIND & (1<<PIND7))) {
+                _delay_ms(10);
+            }
         }
     }
 }

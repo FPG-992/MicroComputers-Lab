@@ -21,6 +21,7 @@ int main(void) {
     
     // set PORTD to an input
     DDRD = 0x00;
+    PORTD = 0xFF;
     
     // Setup ADC
     ADMUX = (1<<REFS0);
@@ -37,36 +38,36 @@ int main(void) {
             OCR1AL = read;
         } else {
             temp = PIND;
-            if ((temp & (1<<PIND3)) == 0) {
+            if (!(temp & (1<<PIND3))) {
                 if (index < 12) {
                     index++;
                     OCR1AL = DC_VALUE[index];
                 }
-                while ((PIND & (1<<PIND3)) == 0);
-                _delay_ms(50);
-            } else if ((temp & (1<<PIND4)) == 0) {
+                while (!(PIND & (1<<PIND3))) {
+                    _delay_ms(10);
+                }
+            } else if (!(temp & (1<<PIND4))) {
                 if (index > 0) {
                     index--;
                     OCR1AL = DC_VALUE[index];
                 }
-                while ((PIND & (1<<PIND4)) == 0);
-                _delay_ms(50);
+                while (!(PIND & (1<<PIND4))) {
+                    _delay_ms(10);
+                }
             }
         }
         temp = PIND;
-        if ((temp & (1<<PIND6)) == 0) {
-            _delay_ms(5);
-            while ((PIND & (1<<PIND6)) == 0) {
-                _delay_ms(5);
-            }
+        if (!(temp & (1<<PIND6))) {            
             status = 0x00;
             OCR1AL = DC_VALUE[index];
-        } else if ((temp & (1<<PIND7)) == 0) {
-            _delay_ms(5);
-            while ((PIND & (1<<PIND7)) == 0) {
-                _delay_ms(5);
+            while (!(PIND & (1<<PIND6))) {
+                _delay_ms(10);
             }
+        } else if (!(temp & (1<<PIND7))) {            
             status = 0xFF;
+            while (!(PIND & (1<<PIND7))) {
+                _delay_ms(10);
+            }
         }
     }
 }
