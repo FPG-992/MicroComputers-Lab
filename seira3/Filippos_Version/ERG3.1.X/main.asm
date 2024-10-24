@@ -7,11 +7,10 @@
 .def DC_VALUE=r20
 .def TablePointer=r21
 
-.DutyCycleTable: .DB 5, 26, 46, 66, 87, 108, 128, 148, 168, 189, 209, 230, 250, 0 
-
-.org 0x0 ; Start the code at address 0x0
-    rjmp reset ; Jump to the reset label
-
+.org 0x0
+    rjmp reset
+    
+DutyCycleTable: .DB 5, 26, 46, 66, 87, 108, 128, 148, 168, 189, 209, 230, 250, 0 
 
 reset:
     ; Initialize Stack Pointer
@@ -36,12 +35,12 @@ reset:
 
     ; Set the initial duty cycle to 50% which is in the 6th position of the table (128)
     ldi TablePointer, 6
-    ldi XL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into XL (etsi gia allagh)
-    ldi XH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into XH (16bit pair register X )
-    add XL, TablePointer
-    adc XH, r16
-    lpm DC_VALUE, X ; Load the value pointed by X from the table into DC_VALUE
-    STS OCR1A, DC_VALUE ; Store the value of DC_VALUE to OCR1A
+    ldi ZL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into ZL (etsi gia allagh)
+    ldi ZH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into ZH (16bit pair register Z )
+    add ZL, TablePointer
+    adc ZH, r16
+    lpm DC_VALUE,Z ; Load the value pointed by X from the table into DC_VALUE
+    STS OCR1AL, DC_VALUE ; Store the value of DC_VALUE to OCR1A
 
 
 main:
@@ -67,12 +66,12 @@ DT_increase:
     breq main ; If it is, do nothing
 
     inc TablePointer
-    ldi XL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into XL
-    ldi XH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into XH
-    add XL, TablePointer
-    adc XH, r16
-    lpm DC_VALUE, X ; Load the value pointed by X from the table into DC_VALUE
-    STS OCR1A, DC_VALUE ; Store the value of DC_VALUE to OCR1A
+    ldi ZL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into ZL
+    ldi ZH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into ZH
+    add ZL, TablePointer
+    adc ZH, r16
+    lpm DC_VALUE,Z ; Load the value pointed by X from the table into DC_VALUE
+    STS OCR1AL, DC_VALUE ; Store the value of DC_VALUE to OCR1A
 
     rjmp main
 
@@ -87,12 +86,12 @@ DT_decrease:
     breq main ; If it is, do nothing
 
     dec TablePointer
-    ldi XL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into XL
-    ldi XH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into XH
-    add XL, TablePointer
-    adc XH, r16
-    lpm DC_VALUE, X ; Load the value pointed by X from the table into DC_VALUE
-    STS OCR1A, DC_VALUE ; Store the value of DC_VALUE to OCR1A
+    ldi ZL, LOW(DutyCycleTable*2) ; Load the low byte of the table address into ZL
+    ldi ZH, HIGH(DutyCycleTable*2) ; Load the high byte of the table address into ZH
+    add ZL, TablePointer
+    adc ZH, r16
+    lpm DC_VALUE,Z ; Load the value pointed by X from the table into DC_VALUE
+    STS OCR1AL, DC_VALUE ; Store the value of DC_VALUE to OCR1A
 
     rjmp main
 
