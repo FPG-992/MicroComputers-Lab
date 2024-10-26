@@ -3,8 +3,8 @@
     <type>com.microchip.mplab.nbide.embedded.makeproject</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/make-project/1">
-            <name>ERG4.1</name>
-            <creation-uuid>865e964f-4957-4bfb-ba80-35fc7dd1ebe8</creation-uuid>
+            <name>ERG4.2</name>
+            <creation-uuid>1df805d7-0cef-40f0-892d-ca03dc8378aa</creation-uuid>
             <make-project-type>0</make-project-type>
             <sourceEncoding>ISO-8859-1</sourceEncoding>
             <make-dep-projects/>
