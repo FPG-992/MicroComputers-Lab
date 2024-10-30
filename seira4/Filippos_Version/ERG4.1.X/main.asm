@@ -12,6 +12,10 @@
 .def ADC_VALUE_LOW = r14
 .def ADC_VALUE_HIGH = r15
 
+.equ FOSC_MHZ=16
+.equ DEL_mS=1000
+.equ F1=FOSC_MHZ*DEL_mS
+
 reset:
     ; Initialize Stack Pointer
     ldi r24, LOW(RAMEND)
@@ -70,7 +74,58 @@ ADC_ISR: ;When the conversion is complete the interrupt brings us and we read th
     ;Read the ADC values
     lds ADC_VALUE_LOW, ADCL
     lds ADC_VALUE_HIGH, ADCH
+
+    ;we copy the ADC values to r16 and r17
+    mov r16, ADC_VALUE_LOW ; r16 = ADC_VALUE_LOW
+    mov r17, ADC_VALUE_HIGH ; r17 = ADC_VALUE_HIGH
     
+    ;Convert the ADC value to a 10-bit value
+    lsl r16 ; r16 = r16 << 1
+    rol r17 ; r17 = r17 << 1
+    lsl r16 ; r16 = r16 << 1
+    rol r17 ; r17 = r17 << 1
+
+    add r16, ADC_VALUE_LOW ; r16 = r16 + ADC_VALUE_LOW
+    adc r17, ADC_VALUE_HIGH ; r17 = r17 + ADC_VALUE_HIGH
+
+    ;WE HAVE multiplied the value by 5 and the result is in r16 and r17
+    ;R17 is the high byte and R16 is the low byte of the result
+    ;Now multiplying by 100 to get * 500 so we can print the value in the LCD with 2 decimal points
+    
+    clr r18 ; r18 = 0
+    clr r19 ; r19 = 0
+    clr r20 ; r20 = 0
+
+    ldi r28,100 ; r28 = 100
+
+    mul r16,r28 ; r16 = r16 * r28
+    mov r18,r0 ; r18 = r0 lower byte of the result
+    mov r19,r1 ; r19 = r1 higher byte of the result
+    ; r1:r0 = r16 * 100
+
+    mul r17,r28 ; r17 = r17 * r28 , result in r1 r0
+    add r19,r0 ; r19 = r19 + r0
+    adc r20,r1 ; r20 = r20 + r1
+
+    clr r1 
+    clr r0
+    ;r20:19:18 = r17 * 5 * 100
+
+    ;We have the result in r20 r19 r18 (VADC * 500)
+    ; We now need to divide by 1024 to get the voltage in mV (VADC * 500 / 1024)
+    ; division by 1024 is equivalent to shifting right 10 times
+
+    ldi r21, 10        ; Load the loop counter with 10 (for 10 shifts)
+
+    shift_loop:
+        lsr r20        ; Shift r20 right (most significant byte)
+        ror r19        ; Rotate right through carry into r19
+        ror r18        ; Rotate right through carry into r18
+
+        dec r21        ; Decrement the counter
+        brne shift_loop ; Repeat if the counter is not zero
+
+    ;r20 is gonna be empty and r19 r18 will have the result of the division because we shifted 10 times to the right so we only need to print r19 r18
 
 write_2_nibbles: 
     push r24          ; save r24(LCD_Data) 
@@ -105,7 +160,7 @@ lcd_data:
     rcall write_2_nibbles     ; send data 
     ldi r24 ,250                  ; 
     ldi r25 ,0                    ; Wait 250uSec 
-    rcall wait_usec 
+    rcall wait_x_msec 
     ret 
 
 lcd_command: 
@@ -113,7 +168,7 @@ lcd_command:
     rcall write_2_nibbles    ; send Instruction 
     ldi r24 ,250                  ; 
     ldi r25 ,0                   ; Wait 250uSec 
-    rcall wait_usec 
+    rcall wait_x_msec 
     ret 
 
 lcd_clear_display: 
@@ -142,7 +197,7 @@ lcd_init:
     cbi PORTD ,PD3 
     ldi r24 ,250   ; 
     ldi r25 ,0   ; Wait 250uSec  
-    rcall wait_usec            ; 
+    rcall wait_x_msec            ; 
      
     ldi r24 ,0x30    ; command to switch to 8 bit mode 
     out PORTD ,r24  ; 
@@ -152,7 +207,7 @@ lcd_init:
     cbi PORTD ,PD3 
     ldi r24 ,250   ; 
     ldi r25 ,0   ; Wait 250uSec  
-    rcall wait_usec            ; 
+    rcall wait_x_msec            ; 
      
     ldi r24 ,0x30    ; command to switch to 8 bit mode 
     out PORTD ,r24  ; 
@@ -162,7 +217,7 @@ lcd_init:
     cbi PORTD ,PD3 
     ldi r24 ,250                  ; 
     ldi r25 ,0                    ; Wait 250uSec 
-    rcall wait_usec 
+    rcall wait_x_msec 
      
     ldi r24 ,0x20                ; command to switch to 4 bit mode 
     out PORTD ,r24 
@@ -172,7 +227,7 @@ lcd_init:
     cbi PORTD ,PD3 
     ldi r24 ,250                  ; 
     ldi r25 ,0                    ; Wait 250uSec 
-    rcall wait_usec 
+    rcall wait_x_msec 
      
     ldi r24 ,0x28              ;  5x8 dots, 2 lines 
     rcall lcd_command 
@@ -183,4 +238,28 @@ lcd_init:
  
     ldi r24 ,0x06                ; Increase address, no display shift 
     rcall lcd_command         ;
+    ret
+
+    wait_x_msec:
+    push r23
+    push r24
+    push r25
+repeat_x:
+    rcall wait_one_msec
+    sbiw r24,1
+    brne repeat_x
+    
+    pop r25
+    pop	r24
+    pop r23
+    ret
+
+wait_one_msec:
+    ldi	r23, 247
+repeat_one:
+    dec r23
+    nop
+    brne repeat_one
+    
+    nop
     ret
