@@ -149,12 +149,12 @@ int main(void) {
             display_gas_detected();
             while (last_measure >= 70) {
                 PORTB = 0xFF;
-                for (unsigned char i = 150; i >= last_measure; i--) {
-                    _delay_ms(5);
+                for (unsigned char i = 255; i >= last_measure; i--) {
+                    _delay_ms(1);
                 }
                 PORTB = 0x00;
-                for (unsigned char i = 150; i >= last_measure; i--) {
-                    _delay_ms(5);
+                for (unsigned char i = 255; i >= last_measure; i--) {
+                    _delay_ms(1);
                 }
             }
             lcd_clear();
