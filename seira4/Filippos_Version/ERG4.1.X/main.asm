@@ -9,8 +9,8 @@
 .org 0x2A ; ADC Conversion Complete Interrupt
     rjmp ADC_ISR
     
-.def ADC_VALUE_LOW = r16
-.def ADC_VALUE_HIGH = r17
+.def ADC_VALUE_LOW = r14
+.def ADC_VALUE_HIGH = r15
 
 reset:
     ; Initialize Stack Pointer
@@ -51,6 +51,9 @@ main:
     ; Initialize LCD
     rcall lcd_init
 
+    ; Set PORTD as output
+    ldi r24, 0xFF
+    out DDRD, r24
     
 ;===END OF MAIN PROGRAM=== ROUTINES START HERE===
 
@@ -64,13 +67,10 @@ ISR_TIMER1_OVF: ;We start the ADC conversion and we wait for the result
     reti
 
 ADC_ISR: ;When the conversion is complete the interrupt brings us and we read the ADC values
+    ;Read the ADC values
     lds ADC_VALUE_LOW, ADCL
     lds ADC_VALUE_HIGH, ADCH
     
-    ;Adif is set to 1 when the conversion is complete by the vector itself
-    ;Until here we have: Setup the ADC, the Overflow Timer, Started the ADC conversion, Wait for the ADC conversion to complete, Read the ADC value
-    ;What's left to do below is: Multiply by 5, divide by 1024, and display the result on the LCD
-
 
 write_2_nibbles: 
     push r24          ; save r24(LCD_Data) 
