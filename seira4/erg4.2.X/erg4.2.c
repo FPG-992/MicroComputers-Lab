@@ -11,11 +11,13 @@ void write2(unsigned char input) {
     PORTD = (input & 0xF0) | (prev & 0x0F);
     
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
     
     PORTD = ((input & 0x0F) << 4) | (prev & 0x0F);
             
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
 }
 
@@ -42,24 +44,28 @@ void lcd_init() {
     // Switch to 8bit mode
     PORTD = 0x30;
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
     _delay_us(250);
     
     // Switch to 8bit mode
     PORTD = 0x30;
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
     _delay_us(250);
     
     // Switch to 8bit mode
     PORTD = 0x30;
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
     _delay_us(250);
     
     // Switch to 8bit mode
     PORTD = 0x20;
     PORTD |= (1<<3);
+    _delay_us(1);
     PORTD &= 0b11110111;
     _delay_us(250);
     
@@ -100,6 +106,8 @@ int main(void) {
     // Setup ADC
     ADMUX = (1<<REFS0) | (1<<MUX0);
     ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
+    
+    lcd_init();
     
     while (1) {
         // Request ADC data
