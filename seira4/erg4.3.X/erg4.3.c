@@ -76,7 +76,7 @@ ISR(TIMER3_COMPA_vect) {
     ADCSRA |= (1<<ADSC);
     while ((ADCSRA & (1<<ADSC)) != 0);
     
-    double input = ADC * 5;
+    double input = ADC * 3;
     input = input / 1024;
     input = input - 0.1;
     input = input * 77.519;
