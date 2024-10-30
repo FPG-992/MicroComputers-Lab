@@ -52,7 +52,6 @@ reset:
     
     sei
 main:    
-    rcall wait_x_msec
     lds r20, ADCSRA
     ori r20, (1<<ADSC)
     sts ADCSRA, r20
