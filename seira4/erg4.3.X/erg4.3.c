@@ -3,7 +3,6 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 
-unsigned char hundreds, tens, units;
 unsigned int last_measure = 0;
 
 void write2(unsigned char input) {
