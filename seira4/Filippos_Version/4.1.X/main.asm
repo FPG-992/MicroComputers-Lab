@@ -160,7 +160,7 @@ ADC_ISR: ;When the conversion is complete the interrupt brings us and we read th
     clr r27                 ; Clear r27 to zero because we don't need it anymore because max value fits 2 registers
 
     ; Now, r26:r25 holds the result of ADC_VALUE * 40 * 128 / 1024 = ADC_VALUE * 5
-    
+
 
     pop r25 
     pop r24
@@ -286,6 +286,7 @@ lcd_init:
     ldi r24 ,0x06                ; Increase address, no display shift 
     rcall lcd_command         ;
     ret
+
 
     div16u:	
     push r14
