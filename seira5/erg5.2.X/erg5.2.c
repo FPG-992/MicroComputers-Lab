@@ -188,7 +188,7 @@ int main(void) {
     // Set PORTD to an output
     DDRD = 0xFF;
     
-    // Set 3 LSB of EXT_PORT0 as output
+    // Set 4 LSB of EXT_PORT0 as output
     PCA9555_0_write(REG_CONFIGURATION_0, 0b11110000);
     
     // Configure EXT_PORT1
