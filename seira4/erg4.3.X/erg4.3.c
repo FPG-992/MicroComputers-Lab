@@ -107,10 +107,7 @@ void display_clear() {
 }
 
 int main(void) {
-    // PORTD as output
     DDRD = 0xFF;
-    
-    // PORTB as output
     DDRB = 0xFF;
     
     // Setup ADC
