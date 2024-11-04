@@ -202,4 +202,4 @@ int main(void) {
         }
     }
 }
-
+//else + displays are implemented from Chris' Solution
