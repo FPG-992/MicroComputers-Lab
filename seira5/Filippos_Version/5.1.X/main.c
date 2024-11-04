@@ -15,6 +15,11 @@
 #define TWI_WRITE 0            // Writing to TWI device
 #define SCL_CLOCK 100000L      // TWI clock in Hz
 
+#define PB0 0
+#define PB1 1
+#define PB2 2
+#define PB3 3
+
 // Fscl = Fcpu / (16 + 2 * TWBR0_VALUE * PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU / SCL_CLOCK) - 16) / 2
 
@@ -191,12 +196,36 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 
 int main(void) {
     twi_init();
+
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // Set EXT_PORT0 as output
 
+    DDRB &= 0XF0; // Set PORTB0-PORTB3 as input
+
+    PORTB |= 0x0F; // Enable pull-up resistors on PORTB0-PORTB3
+
+    PCA9555_0_write(REG_CONFIGURATION_1, 0xFF); // All IO1_x as inputs
+
     while (1) {
-        PCA9555_0_write(REG_OUTPUT_0, 0x00);
-        _delay_ms(1000);
-        PCA9555_0_write(REG_OUTPUT_0, 0xFF);
-        _delay_ms(1000);
+    uint8_t inputs = PINB & 0x0F; // Read PORTB0 to PORTB3
+
+    uint8_t A = (inputs >> PB0) & 1; // Read PORTB0
+    uint8_t B = (inputs >> PB1) & 1; // Read PORTB1
+    uint8_t C = (inputs >> PB2) & 1; // Read PORTB2
+    uint8_t D = (inputs >> PB3) & 1; // Read PORTB3
+
+
+    uint8_t F0 = !( (!A && B && C) || (B && !D) );
+
+    uint8_t F1 = (A || B || C) && (B && !D);
+
+    uint8_t output = 0x00;
+    output |= (F0 << 0); // Set EXT_PORT0_0
+    output |= (F1 << 1); // Set EXT_PORT0_1
+
+    PCA9555_0_write(REG_OUTPUT_0, output);
+
+    _delay_ms(200); // Delay 200ms so we can see the output
+
+
     }
 }
