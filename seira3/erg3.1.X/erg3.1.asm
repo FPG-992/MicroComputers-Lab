@@ -23,7 +23,7 @@ reset:
     ldi r24, (0<<WGM11) | (1<<WGM10) | (0<<COM1A0) | (1<<COM1A1)
     sts TCCR1A, r24
     
-    ; Also load CLK/256 configuration (16MHz / 256 = 62500Hz)
+    ; Also load CLK configuration
     ldi r24, (0<<WGM13) | (1<<WGM12) | (0<<CS12) | (0<<CS11) | (1<<CS10)
     sts TCCR1B, r24
     
