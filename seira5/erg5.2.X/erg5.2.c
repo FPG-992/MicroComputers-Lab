@@ -185,19 +185,18 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 int main(void) {
     twi_init();
     
-    // Set PORTD to an output
-    DDRD = 0xFF;
-    
     // Set 4 LSB of EXT_PORT0 as output
-    PCA9555_0_write(REG_CONFIGURATION_0, 0b11110000);
+    PCA9555_0_write(REG_CONFIGURATION_0, 0b00000000);
     
     // Configure EXT_PORT1
     PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
     
+    PCA9555_0_write(REG_OUTPUT_1, 0x00);
+    
     while (1) {
-        PCA9555_0_write(REG_OUTPUT_1, 1);
-        uint8_t input = PCA9555_0_read(REG_INPUT_0);
+        uint8_t input = PCA9555_0_read(REG_INPUT_1);
         input = input>>4;
+        input = ~input;
         PCA9555_0_write(REG_OUTPUT_0, input);
     }
 }

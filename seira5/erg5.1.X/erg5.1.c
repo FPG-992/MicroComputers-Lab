@@ -193,11 +193,11 @@ int main(void) {
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
     
     while (1) {
-        unsigned char input = PINB;
+        unsigned char input = ~PINB;
         unsigned char A = input & 1;
-        unsigned char B = (input & (1<<1))>>1;
-        unsigned char C = (input & (1<<2))>>2;
-        unsigned char D = (input & (1<<3))>>3;
+        unsigned char B = (input>>1) & 1;
+        unsigned char C = (input>>2) & 1;
+        unsigned char D = (input>>3) & 1;
         unsigned char An = (~A) & 1;
         unsigned char Bn = (~B) & 1;
         unsigned char Dn = (~D) & 1;
