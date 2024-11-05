@@ -204,33 +204,45 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 // LCD Functions
 
 void write_2_nibbles(uint8_t data){ //4 data lines D4 - D7 | each byte is 8 bits and must be sent in 2 nibbles (4bits)
-    //read pind
+
+    //we need to extract the high nibble and the low nibble from the data
     uint8_t high_nibble, low_nibble;
-    high_nibble = data & 0xF0;
-    PORTD = (PORTD & 0x0F) | high_nibble;
+    uint8_t output_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
 
-    PORTD |= (1<<E); // rising edge
-    _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
-    
-    //EXTRACT LOW NIBBLE 
-    low_nibble = data << 4 & 0xF0;
-    PORTD = (PORTD & 0x0F) | low_nibble;
+    //EXTRACT HIGH NIBBLE
+    output_data &= (0X3C); // clear D4-D7
+    output_data |= ((data & 0xF0) >> 4) << 2; // we shift the high nibble 4 bits to the right and then shift it to the left to match D4-D7
+    PCA9555_0_write(REG_OUTPUT_1,output_data); // write high nibble to PCA9555
 
-    //PULSE ENABLE PIN 
-    PORTD |= (1<<E); // rising edge
+    //PULSE ENABLE PIN
+    PCA9555_0_write(REG_OUTPUT_1,output_data | (1<<LCD_E)); // rising edge
     _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
+    PCA9555_0_write(REG_OUTPUT_1,output_data & ~(1<<LCD_E)); // falling edge
+
+    //EXTRACT LOW NIBBLE
+    output_data &= (0X3C); // clear D4-D7
+    output_data |= (data & 0x0F) << 2; // we shift the low nibble to the left to match D4-D7
+    PCA9555_0_write(REG_OUTPUT_1,output_data); // write low nibble to PCA9555
+
+    //PULSE ENABLE PIN
+    PCA9555_0_write(REG_OUTPUT_1,output_data | (1<<LCD_E)); // rising edge
+    _delay_us(1);
+    PCA9555_0_write(REG_OUTPUT_1,output_data & ~(1<<LCD_E)); // falling edge
+    _delay_us(1);
 }
 
 void lcd_data(uint8_t data){
-    PORTD |= (1<<RS); // RS = 1 Data incoming not command
-    write_2_nibbles(data);
-    _delay_us(250);
+    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
+    current_data |= (1<<LCD_RS); // set RS to 1
+    PCA9555_0_write(REG_OUTPUT_1,current_data); // write data to PCA9555
+    write_2_nibbles(data); // write data to LCD
+    _delay_us(250); // delay for data write
 }
 
 void lcd_command(uint8_t command){
-    PORTD &= ~(1<<RS); // RS = 0 Command incoming not data
+    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
+    current_data &= ~(1<<LCD_RS); // set RS to 0
+    PCA9555_0_write(REG_OUTPUT_1,current_data); // write data to PCA9555
     write_2_nibbles(command);
     _delay_us(250);
 }
@@ -244,31 +256,16 @@ void lcd_init(void){
     _delay_ms(200); // wait for power up
     
     //8BIT MODE INITIALIZATION - ENABLE PULSE
-    PORTD = (PORTD & 0x0F) | 0x30; 
-    PORTD |= (1<<E); // rising edge
-    _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
-    _delay_us(250);
+    lcd_command(0x30);
 
     //8BIT MODE INITIALIZATION - ENABLE PULSE - 2ND TIME
-    PORTD = (PORTD & 0x0F) | 0x30; 
-    PORTD |= (1<<E); // rising edge
-    _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
-    _delay_us(250);
+    lcd_command(0x30);
 
     //8BIT MODE INITIALIZATION - ENABLE PULSE - 3RD TIME
-    PORTD = (PORTD & 0x0F) | 0x30; 
-    PORTD |= (1<<E); // rising edge
-    _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
-    _delay_us(250);
+    lcd_command(0x30);
 
     //4BIT MODE INITIALIZATION
-    PORTD = (PORTD & 0x0F) | 0x20;
-    PORTD |= (1<<E); // rising edge
-    _delay_us(1);
-    PORTD &= ~(1<<E); // falling edge
+    lcd_command(0x20);
     _delay_us(250);
 
     //FUNCTION SET 4BIT MODE | 2 LINES | 5X8 DOTS
@@ -293,8 +290,6 @@ void lcd_string(char *str){
 
 int main(void) {
     
-    char *str = "FILIPPOS GIANNAKOPOULOS";
-
     DDRD = 0xFF; // Set PORTD as output
 
     twi_init(); // Initialize TWI
@@ -305,7 +300,11 @@ int main(void) {
 
     /* Replace with your application code */
     while (1) {
-        
+    lcd_command(0x80); // 0x80 is the DDRAM address for first line, position 0
+    lcd_string("FILIPPOS"); // 16 characters
+
+    lcd_command(0xC0); // 0xC0 is the DDRAM address for second line, position 0
+    lcd_string("GIANNAKOPOULOS"); // 16 characters
     }
 }
 
