@@ -38,6 +38,8 @@ typedef enum {
 #define TW_STATUS_MASK 0b11111000
 #define TW_STATUS (TWSR0 & TW_STATUS_MASK)
 
+uint8_t PREVIOUS = 0;
+
 // Initializes TWI clock
 void twi_init() {
     TWSR0 = 0;              // Prescaler = 1
@@ -164,6 +166,7 @@ void twi_stop() {
 // PCA9555 functions
 
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
+    PREVIOUS = value;
     twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
     twi_write(reg);
     twi_write(value);
@@ -185,41 +188,45 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 // LCD Commands
 
 void write2(unsigned char input) {
-    PCA9555_0_write(REG_CONFIGURATION_1, 0xFF);     // Set EXT_PORT1 as input
-    unsigned char prev = PCA9555_0_read(REG_INPUT_1);
-    PCA9555_0_write(REG_CONFIGURATION_1, 0x00);     // Set EXT_PORT0 as output again
+    unsigned char prev = PREVIOUS;
     
     unsigned char write = (input & 0xF0) | (prev & 0x0F);
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    PCA9555_0_write(REG_OUTPUT_0, write);
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
-    
+    write |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    write &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, write);
+        
     write = ((input & 0x0F) << 4) | (prev & 0x0F);
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    PCA9555_0_write(REG_OUTPUT_0, write);
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
+    write |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    write &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, write);
 }
 
 void lcd_data(unsigned char input) {
-    PCA9555_0_write(REG_CONFIGURATION_1, 0xFF);     // Set EXT_PORT1 as input
-    unsigned char prev = PCA9555_0_read(REG_INPUT_1);
-    PCA9555_0_write(REG_CONFIGURATION_1, 0x00);     // Set EXT_PORT0 as output again
+    unsigned char prev = PREVIOUS;
+    prev |= (1<<2);
     
-    PCA9555_0_write(REG_OUTPUT_1, prev | (1<<2));
+    PCA9555_0_write(REG_OUTPUT_0, prev);
     write2(input);
     _delay_us(250);
 }
 
 void lcd_command(unsigned char input) {
-    PCA9555_0_write(REG_CONFIGURATION_1, 0xFF);     // Set EXT_PORT1 as input
-    unsigned char prev = PCA9555_0_read(REG_INPUT_1);
-    PCA9555_0_write(REG_CONFIGURATION_1, 0x00);     // Set EXT_PORT0 as output again
+    unsigned char prev = PREVIOUS;
+    prev &= 0b11111011;
     
-    PCA9555_0_write(REG_OUTPUT_1, prev & 0b11111011);
+    PCA9555_0_write(REG_OUTPUT_0, prev);
     write2(input);
     _delay_us(250);
+}
+
+void lcd_nextline() {
+    lcd_command(0b11000000);
 }
 
 void lcd_clear() {
@@ -232,32 +239,47 @@ void lcd_init() {
     
     // Switch to 8bit mode
     unsigned char write = 0x30;
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    PCA9555_0_write(REG_OUTPUT_0, write);
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
+    unsigned char temp = write;
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
     _delay_us(250);
     
-    // Switch to 8bit mode
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    temp = write;
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
+    // Switch to 8bit mode
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
     _delay_us(250);
     
-    // Switch to 8bit mode
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    temp = write;
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
+    // Switch to 8bit mode
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
     _delay_us(250);
     
     // Switch to 8bit mode
     write = 0x20;
-    PCA9555_0_write(REG_OUTPUT_1, write);
+    temp = write;
+    PCA9555_0_write(REG_OUTPUT_0, write);
     
-    PCA9555_0_write(REG_OUTPUT_1, write | (1<<3));
-    PCA9555_0_write(REG_OUTPUT_1, write & 0b11110111);
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
     _delay_us(250);
     
     lcd_command(0x28);
@@ -271,19 +293,38 @@ void lcd_init() {
 
 int main(void) {
     twi_init();
-    
+        
     // Configure EXT_PORT1 as output
-    PCA9555_0_write(REG_CONFIGURATION_1, 0x00);
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
     
     // Enable LCD
     lcd_init();
     
     // Display name and surname
-    char message[] = "CHRISTOFOROS    CHARALAMBOUS";
+    char first_name[] = "CHRISTOFOROS";
+    char last_name[] = "CHARALAMBOUS";
     
-    for (int i = 0; i < 28; i++) {
-        lcd_data(message[i]);
+    char first_nameF[] = "FILIPPOS";
+    char last_nameF[] = "GIANNAKOPOULOS";
+    
+    while (1) {
+        for (int i = 0; i < 12; i++) {
+            lcd_data(first_name[i]);
+        }
+        lcd_nextline();
+        for (int i = 0; i < 12; i++) {
+            lcd_data(last_name[i]);
+        }
+        _delay_ms(2000);
+        lcd_clear();
+        for (int i = 0; i < 8; i++) {
+            lcd_data(first_nameF[i]);
+        }
+        lcd_nextline();
+        for (int i = 0; i < 14; i++) {
+            lcd_data(last_nameF[i]);
+        }
+        _delay_ms(2000);
+        lcd_clear();
     }
-    
-    while (1);
 }
