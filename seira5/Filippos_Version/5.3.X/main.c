@@ -207,42 +207,42 @@ void write_2_nibbles(uint8_t data){ //4 data lines D4 - D7 | each byte is 8 bits
 
     //we need to extract the high nibble and the low nibble from the data
     uint8_t high_nibble, low_nibble;
-    uint8_t output_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
+    uint8_t output_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
 
     //EXTRACT HIGH NIBBLE
     output_data &= (0X3C); // clear D4-D7
     output_data |= ((data & 0xF0) >> 4) << 2; // we shift the high nibble 4 bits to the right and then shift it to the left to match D4-D7
-    PCA9555_0_write(REG_OUTPUT_1,output_data); // write high nibble to PCA9555
+    PCA9555_0_write(REG_OUTPUT_0,output_data); // write high nibble to PCA9555
 
     //PULSE ENABLE PIN
-    PCA9555_0_write(REG_OUTPUT_1,output_data | (1<<LCD_E)); // rising edge
+    PCA9555_0_write(REG_OUTPUT_0,output_data | (1<<LCD_E)); // rising edge
     _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_1,output_data & ~(1<<LCD_E)); // falling edge
+    PCA9555_0_write(REG_OUTPUT_0,output_data & ~(1<<LCD_E)); // falling edge
 
     //EXTRACT LOW NIBBLE
     output_data &= (0X3C); // clear D4-D7
     output_data |= (data & 0x0F) << 2; // we shift the low nibble to the left to match D4-D7
-    PCA9555_0_write(REG_OUTPUT_1,output_data); // write low nibble to PCA9555
+    PCA9555_0_write(REG_OUTPUT_0,output_data); // write low nibble to PCA9555
 
     //PULSE ENABLE PIN
-    PCA9555_0_write(REG_OUTPUT_1,output_data | (1<<LCD_E)); // rising edge
+    PCA9555_0_write(REG_OUTPUT_0,output_data | (1<<LCD_E)); // rising edge
     _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_1,output_data & ~(1<<LCD_E)); // falling edge
+    PCA9555_0_write(REG_OUTPUT_0,output_data & ~(1<<LCD_E)); // falling edge
     _delay_us(1);
 }
 
 void lcd_data(uint8_t data){
-    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
+    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
     current_data |= (1<<LCD_RS); // set RS to 1
-    PCA9555_0_write(REG_OUTPUT_1,current_data); // write data to PCA9555
+    PCA9555_0_write(REG_OUTPUT_0,current_data); // write data to PCA9555
     write_2_nibbles(data); // write data to LCD
     _delay_us(250); // delay for data write
 }
 
 void lcd_command(uint8_t command){
-    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_1); // read current data from PCA9555
+    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
     current_data &= ~(1<<LCD_RS); // set RS to 0
-    PCA9555_0_write(REG_OUTPUT_1,current_data); // write data to PCA9555
+    PCA9555_0_write(REG_OUTPUT_0,current_data); // write data to PCA9555
     write_2_nibbles(command);
     _delay_us(250);
 }
@@ -294,7 +294,7 @@ int main(void) {
 
     twi_init(); // Initialize TWI
 
-    PCA9555_0_write(REG_CONFIGURATION_1, 0x00); // Set PORT1 as output
+    PCA9555_0_write(REG_CONFIGURATION_0, 0x00); // Set PORT1 as output
     
     lcd_init(); // Initialize LCD
 

@@ -210,7 +210,7 @@ char read_keypad(void){
 
 void control_leds(char key){
     //set all leds off
-    PCA9555_0_write(REG_OUTPUT_0, 0x00);
+//    PCA9555_0_write(REG_OUTPUT_0, 0x00); //this is not needed
     //set the led according to the key pressed
     switch (key){
         case '*':
@@ -241,7 +241,8 @@ int main(void){
     PCA9555_0_write(REG_CONFIGURATION_0, 0xF0); // Set IO0_0 - IO0_3 as output
 
     PCA9555_0_write(REG_CONFIGURATION_1, 0xFE); // Set IO1_0 as output and IO1_4 - IO1_7 as input
-
+    PCA9555_0_write(REG_OUTPUT_1, 0x00);    // Set IO1_0 as low
+    
     while (1){
         char key = read_keypad();
         control_leds(key);

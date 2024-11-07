@@ -207,6 +207,7 @@ int main(void) {
 
     while (1) {
     uint8_t inputs = PINB & 0x0F; // Read PORTB0 to PORTB3
+    inputs = ~inputs; // Invert inputs
 
     uint8_t A = (inputs >> PB0) & 1; // Read PORTB0
     uint8_t B = (inputs >> PB1) & 1; // Read PORTB1
@@ -214,17 +215,15 @@ int main(void) {
     uint8_t D = (inputs >> PB3) & 1; // Read PORTB3
 
 
-    uint8_t F0 = !( (!A && B && C) || (B && !D) );
+    uint8_t F0 = !( (!A & B & C) | (B & !D) ); //use bitwise operators
 
-    uint8_t F1 = (A || B || C) && (B && !D);
+    uint8_t F1 = (A | B | C) & (B & !D); //use bitwise operators
 
     uint8_t output = 0x00;
     output |= (F0 << 0); // Set EXT_PORT0_0
     output |= (F1 << 1); // Set EXT_PORT0_1
 
     PCA9555_0_write(REG_OUTPUT_0, output);
-
-    _delay_ms(200); // Delay 200ms so we can see the output
 
 
     }
