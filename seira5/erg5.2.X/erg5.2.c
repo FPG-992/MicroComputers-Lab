@@ -191,7 +191,7 @@ int main(void) {
     // Configure EXT_PORT1
     PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
     
-    PCA9555_0_write(REG_OUTPUT_1, 0x00);
+    PCA9555_0_write(REG_OUTPUT_1, 0b00001110);
     
     while (1) {
         uint8_t input = PCA9555_0_read(REG_INPUT_1);
