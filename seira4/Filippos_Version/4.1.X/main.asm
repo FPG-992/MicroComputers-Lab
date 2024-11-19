@@ -9,12 +9,22 @@
 .org 0x2A ; ADC Conversion Complete Interrupt
     rjmp ADC_ISR
     
-.def ADC_VALUE_LOW = r27
-.def ADC_VALUE_HIGH = 28
+.def ADC_VALUE_LOW = r28
+.def ADC_VALUE_HIGH = r29
+.def temp = r17
 
 .equ FOSC_MHZ=16
 .equ DEL_mS=1000
 .equ F1=FOSC_MHZ*DEL_mS
+
+.equ PD0=0
+.equ PD1=1
+.equ PD2=2
+.equ PD3=3
+.equ PD4=4
+.equ PD5=5
+.equ PD6=6
+.equ PD7=7
 
 reset:
     ; Initialize Stack Pointer
@@ -42,9 +52,9 @@ main:
     ; Enable Timer1 Overflow Interrupt | We want one interrupt each second
     ;65536-15625=49911=0xC287
     ldi r17, HIGH(49911)
-    out TCNT1H, r17
+    sts TCNT1H, r17
     ldi r17, LOW(49911)
-    out TCNT1L, r17
+    sts TCNT1L, r17
 
     ldi r24, (1<<TOIE1) ;ENABLE Interrupt Overflow Timer1 
     sts TIMSK1, r24 
@@ -64,23 +74,167 @@ main:
 
 ;===ADC INTERRUPT SERVICE ROUTINE===
 ISR_TIMER1_OVF: ;We start the ADC conversion and we wait for the result
-    sbi ADCSRA, ADSC ; Start ADC conversion
+    lds temp, ADCSRA ;
+    ori temp, (1<<ADSC) ; Set ADSC flag of ADCSRA
+    sts ADCSRA, temp 
     ldi r17, HIGH(49911)
-    out TCNT1H, r17
+    sts TCNT1H, r17
     ldi r17, LOW(49911)
-    out TCNT1L, r17
+    sts TCNT1L, r17
     reti
 
 ADC_ISR: ;When the conversion is complete the interrupt brings us and we read the ADC values
-
+    push r31
+    push r30
+    push r29
+    push r28
+    push r20
+    push r21
+    push r22
+    push r23
     lds ADC_VALUE_LOW, ADCL
     lds ADC_VALUE_HIGH, ADCH
     
     ;Adif is set to 1 when the conversion is complete by the vector itself
     ;Until here we have: Setup the ADC, the Overflow Timer, Started the ADC conversion, Wait for the ADC conversion to complete, Read the ADC value
     ;What's left to do below is: Multiply by 5, divide by 1024, and display the result on the LCD
+    
+    mov r31, ADC_VALUE_HIGH ; Move the high byte of the ADC value to r31
+    mov r30, ADC_VALUE_LOW ; Move the low byte of the ADC value to r30
 
-   reti
+    ; Multiply by 4
+
+    clc
+    rol r28
+    rol r29
+    clc
+    rol r28
+    rol r29
+    
+    ; add original value to the result to get MULTIPLY BY 5
+    add r28, r30
+    adc r29, r31    
+
+    ;we have value multiplied by 5 in r28 and r29
+    ;we now want to multiply by 100
+    ldi r20,100
+    mul r28,r20 
+    mov r21,r0
+    mov r22,r1
+    clr r0
+    clr r1
+    ;we have value low_value multiplied by 100 in r21 and r22
+    clr r23
+
+    mul r29,r20
+    add r22,r0
+    adc r23,r1
+    ;we have value high_value multiplied by 100 in r22 and r23
+    ;r23:r22:r21 is the result of the multiplication by 100 of adc_value*5
+
+    ;we now want to divide by 1024
+    ldi r20,10 ;right shift 10 times
+
+    div_loop:
+        lsr r23    ; Shift MSB
+        ror r22    ; Rotate into middle byte
+        ror r21    ; Rotate into LSB
+        dec r20    ; Decrement counter
+        brne div_loop   ; If not done, loop
+
+    ; we now have the result in r22:r21 and we want to get hundreds, tens and units
+
+    clr r19 ;hundreds
+    clr r18 ;tens
+    clr r17 ;units
+    
+    ldi r23,low(100)
+    ldi r24,high(100)
+    mov r25,r21
+    mov r26,r22 ;r26:r25 is the result
+
+    div_by_100:
+            
+        cp r26,r24 ;compare high byte
+        cpc r25,r23 ;compare low byte
+        brlo div_by_10 ;if result is less than 100 then divide by 10
+
+        ;else divide by 100
+        subi r25, low(100)
+        sbci r26, high(100)
+
+        ;increment hundreds
+        inc r19
+
+        ;initiate loop
+        rjmp div_by_100
+
+    div_by_10:
+        ldi r23,low(10)
+        ldi r24,high(10)
+        cp r26,r24 ;compare high byte
+        cpc r25,r23 ;compare low byte
+        brlo div_by_1 ;if result is less than 10 then divide by 1
+
+        ;else divide by 10
+        subi r25, low(10)
+        sbci r26, high(10)
+
+        ;increment tens
+        inc r18
+
+        ;initiate loop
+        rjmp div_by_10
+
+    div_by_1:
+    ldi r23,low(1)
+    ldi r24,high(1)
+
+    cp r26,r24 ;compare high byte
+    cpc r25,r23 ;compare low byte
+    brlo display_result ;if result is less than 1 then display result
+
+    ;else divide by 1
+    subi r25, low(1)
+    sbci r26, high(1)
+
+    ;increment units
+    inc r17
+
+    ;initiate loop
+    rjmp div_by_1
+
+    display_result:
+    ; Convert digits to ASCII
+    ldi r23, '0'      ; ASCII value of '0' (0x30)
+
+    add r19, r23      ; Hundreds digit to ASCII
+    add r18, r23      ; Tens digit to ASCII
+    add r17, r23      ; Units digit to ASCII
+
+    mov r24, r19      ; Hundreds digit to r24
+    rcall lcd_data    ; Display hundreds digit
+
+    mov r24, r18      ; Tens digit to r24
+    rcall lcd_data    ; Display tens digit
+    
+    mov r24, r17      ; Units digit to r24
+    rcall lcd_data    ; Display units digit
+
+    ; Display 'V' character
+    ldi r24, 'V'
+    rcall lcd_data
+    
+    pop r23
+    pop r22
+    pop r21
+    pop r20
+    pop r29
+    pop r28
+    pop r30
+    pop r31
+
+    reti
 
 write_2_nibbles: 
     push r24          ; save r24(LCD_Data) 
@@ -133,7 +287,7 @@ lcd_clear_display:
      
     ldi r24 ,low(5)  ; 
     ldi r25 ,high(5)  ; Wait 5 mSec 
-    rcall wait_msec  ; 
+    rcall wait_x_msec  ; 
      
     ret
 
@@ -142,7 +296,7 @@ lcd_init:
  
     ldi r24 ,low(200)   ; 
     ldi r25 ,high(200)  ; Wait 200 mSec 
-    rcall wait_msec  ; 
+    rcall wait_x_msec  ; 
     
     ldi r24 ,0x30    ; command to switch to 8 bit mode 
     out PORTD ,r24  ; 
