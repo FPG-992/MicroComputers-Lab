@@ -215,6 +215,9 @@ ADC_ISR: ;When the conversion is complete the interrupt brings us and we read th
     mov r24, r19      ; Hundreds digit to r24
     rcall lcd_data    ; Display hundreds digit
 
+    ldi r24, '.'      ; Display '.' character
+    rcall lcd_data
+
     mov r24, r18      ; Tens digit to r24
     rcall lcd_data    ; Display tens digit
     
