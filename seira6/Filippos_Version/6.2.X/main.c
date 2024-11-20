@@ -369,18 +369,20 @@ int main(void){
 
     lcd_init();
 
-    while(1){
+    char last_key = '\0';
+
+        while(1){
         scan_keypad_rising_edge();
         uint16_t keys = pressed_keys;
         
         char key = keypad_to_ascii();
 
-        char last_key = key;
-
-        if(key != '\0' && key != last_key){ {
-            lcd_clear();
-            lcd_data(key);
+        if(key != '\0' && key != last_key) { // Ελέγχει αν υπάρχει νέο πατημένο πλήκτρο
+            lcd_clear();   
+            lcd_data(key);  // Εμφανίζει τον χαρακτήρα στην LCD
+            last_key = key;  // Ενημερώνει το τελευταίο πατημένο πλήκτρο
         }
+        
         // Small delay
         _delay_ms(10);
     }
