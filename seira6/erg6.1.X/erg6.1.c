@@ -210,10 +210,10 @@ void scan_keypad_rising_edge() {
     pressed_keys = pressed_keys_tempo & (~(pressed_keys & pressed_keys_tempo));
 }
 
-char keypad_to_ascii() {
+char keypad_to_ascii(uint16_t keys) {
     uint16_t test = 1;
     for (uint8_t i = 0; i < 16; i++) {
-        if (pressed_keys & test) {
+        if (keys & test) {
             return characters[i];
         }
         test = test<<1;
@@ -232,6 +232,24 @@ int main(void) {
     PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
     
     while (1) {
+        pressed_keys = scan_keypad();
+        char ascii = keypad_to_ascii();
         
+        switch (ascii) {
+            case 'A':
+                PORTB = 0b11111110;
+                break;
+            case '8':
+                PORTB = 0b11111101;
+                break;
+            case '6':
+                PORTB = 0b11111011;
+                break;
+            case '*':
+                PORTB = 0b11110111;
+                break;
+            default:
+                PORTB = 0xFF;
+        }
     }
 }
