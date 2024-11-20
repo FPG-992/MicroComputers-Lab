@@ -241,7 +241,7 @@ char keypad_to_ascii(void){
         }
     }
     //no key pressed
-    return 0;
+    return '\0';
 }
 
 
