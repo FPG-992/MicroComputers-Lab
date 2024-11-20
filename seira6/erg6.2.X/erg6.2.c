@@ -182,23 +182,26 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 }
 
 // Keypad functions
-const uint8_t rows[] = [0b11111110, 0b11111101, 0b11111011, 0b11110111];
-const char characters[] = ['1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'];
-uint16_t pressed_keys = 0x00;
+const uint8_t rows[] = {0b11111110, 0b11111101, 0b11111011, 0b11110111};
+const char characters[] = {'1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'};
+uint16_t pressed_keys = 0x0000;
 
 uint8_t scan_row(uint8_t row) {
-    PCA9555_0_write(REG_CONFIGURATION_1, rows[row]);
+    PCA9555_0_write(REG_OUTPUT_1, rows[row]);
     uint8_t input = PCA9555_0_read(REG_INPUT_1);
     input = ~input;
     return input>>4;
 }
 
-uint8_t scan_keypad() {
-    uint16_t output = 0x00;
+uint16_t scan_keypad() {
+    uint16_t output = 0x0000;
+    uint8_t temp;
     for (uint8_t i = 0; i < 4; i++) {
-        output<<4;
-        output |= scan_row(i);
+        output = output<<4;
+        temp = scan_row(i) & 0x0F;
+        output |= temp;
     }
+    
     return output;
 }
 
