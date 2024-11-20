@@ -246,6 +246,9 @@ char keypad_to_ascii(void){
 
 // LCD Commands
 
+volatile unsigned char PREVIOUS = 0x00; // Αρχικοποίηση της μεταβλητής PREVIOUS
+
+
 void write2(unsigned char input) {
     unsigned char prev = PREVIOUS;
     
@@ -372,7 +375,9 @@ int main(void){
         
         char key = keypad_to_ascii();
 
-        if(key != \0) {
+        char last_key = key;
+
+        if(key != '\0' && key != last_key){ {
             lcd_clear();
             lcd_data(key);
         }
