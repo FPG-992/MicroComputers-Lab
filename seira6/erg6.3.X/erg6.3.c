@@ -182,23 +182,26 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 }
 
 // Keypad functions
-const uint8_t rows[] = [0b11111110, 0b11111101, 0b11111011, 0b11110111];
-const char characters[] = ['1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'];
-uint16_t pressed_keys = 0x00;
+const uint8_t rows[] = {0b11111110, 0b11111101, 0b11111011, 0b11110111};
+const char characters[] = {'1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D'};
+uint16_t pressed_keys = 0x0000;
 
 uint8_t scan_row(uint8_t row) {
-    PCA9555_0_write(REG_CONFIGURATION_1, rows[row]);
+    PCA9555_0_write(REG_OUTPUT_1, rows[row]);
     uint8_t input = PCA9555_0_read(REG_INPUT_1);
     input = ~input;
     return input>>4;
 }
 
-uint8_t scan_keypad() {
-    uint16_t output = 0x00;
+uint16_t scan_keypad() {
+    uint16_t output = 0x0000;
+    uint8_t temp;
     for (uint8_t i = 0; i < 4; i++) {
-        output<<4;
-        output |= scan_row(i);
+        output = output<<4;
+        temp = scan_row(i) & 0x0F;
+        output |= temp;
     }
+    
     return output;
 }
 
@@ -207,7 +210,7 @@ void scan_keypad_rising_edge() {
     _delay_ms(10);
     pressed_keys_tempo &= scan_keypad();
     
-    pressed_keys = pressed_keys_tempo & (~(pressed_keys & pressed_keys_tempo));
+    pressed_keys = pressed_keys_tempo & (~pressed_keys);
 }
 
 char keypad_to_ascii(uint16_t keys) {
@@ -221,82 +224,11 @@ char keypad_to_ascii(uint16_t keys) {
     return '\0';
 }
 
-// LCD Commands
-
-void write2(unsigned char input) {
-    unsigned char prev = PIND;
-    
-    PORTD = (input & 0xF0) | (prev & 0x0F);
-    
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-    
-    PORTD = ((input & 0x0F) << 4) | (prev & 0x0F);
-            
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-}
-
-void lcd_data(unsigned char input) {
-    PORTD |= (1<<2);
-    write2(input);
-    _delay_us(250);
-}
-
-void lcd_command(unsigned char input) {
-    PORTD &= 0b11111011;
-    write2(input);
-    _delay_us(250);
-}
-
-void lcd_clear() {
-    lcd_command(0x01);
-    _delay_ms(5);
-}
-
-void lcd_init() {
-    _delay_ms(200);
-    
-    // Switch to 8bit mode
-    PORTD = 0x30;
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-    _delay_us(250);
-    
-    // Switch to 8bit mode
-    PORTD = 0x30;
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-    _delay_us(250);
-    
-    // Switch to 8bit mode
-    PORTD = 0x30;
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-    _delay_us(250);
-    
-    // Switch to 8bit mode
-    PORTD = 0x20;
-    PORTD |= (1<<3);
-    PORTD &= 0b11110111;
-    _delay_us(250);
-    
-    lcd_command(0x28);
-    
-    lcd_command(0x0c);
-    
-    lcd_clear();
-    
-    lcd_command(0x06);
-}
-
 int main(void) {
-    DDRD = 0xFF;
     DDRB = 0xFF;
-    PORTB = 0xFF;
+    PORTB = 0x00;
     
     twi_init();
-    lcd_init();
     
     // Set EXT_PORT0 as output
     PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
@@ -307,28 +239,30 @@ int main(void) {
     
     while (1) {
         do {
-            scan_keypad_rising_edge();
-            ascii = keypad_to_ascii(pressed_keys);
+            ascii = keypad_to_ascii(scan_keypad());
         } while (ascii == '\0');
         
         first = ascii;
         
+        while(keypad_to_ascii(scan_keypad()) != '\0');
+        
         do {
-            scan_keypad_rising_edge();
-            ascii = keypad_to_ascii(pressed_keys);
+            ascii = keypad_to_ascii(scan_keypad());
         } while (ascii == '\0');
         
         second = ascii;
         
+        while(keypad_to_ascii(scan_keypad()) != '\0');
+        
         if (first == '1' && second == '7') {
-            PORTB = 0b11000000;
+            PORTB = 0b00111111;
             _delay_ms(5000);
-            PORTB = 0xFF;
+            PORTB = 0x00;
         } else {
             for (unsigned char i = 0; i < 5; i++) {
-                PORTB = 0b11000000;
+                PORTB = 0b00111111;
                 _delay_ms(500);
-                PORTB = 0xFF;
+                PORTB = 0x00;
                 _delay_ms(500);
             }
         }
