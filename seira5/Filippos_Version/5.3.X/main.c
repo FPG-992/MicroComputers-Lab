@@ -30,6 +30,8 @@
 // Fscl = Fcpu / (16 + 2 * TWBR0_VALUE * PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU / SCL_CLOCK) - 16) / 2
 
+uint8_t PREVIOUS = 0;  
+
 // PCA9555 REGISTERS
 typedef enum {
     REG_INPUT_0 = 0,
@@ -183,6 +185,7 @@ void twi_stop(void) {
 
 // Write to PCA9555 register
 void PCA9555_0_write(PCA9555_REGISTERS reg, uint8_t value) {
+    PREVIOUS = value;
     twi_start_wait(PCA9555_0_ADDRESS + TWI_WRITE);
     twi_write(reg);
     twi_write(value);
@@ -203,88 +206,115 @@ uint8_t PCA9555_0_read(PCA9555_REGISTERS reg) {
 
 // LCD Functions
 
-void write_2_nibbles(uint8_t data){ //4 data lines D4 - D7 | each byte is 8 bits and must be sent in 2 nibbles (4bits)
+// LCD Commands
 
-    //we need to extract the high nibble and the low nibble from the data
-    uint8_t high_nibble, low_nibble;
-    uint8_t output_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
-
-    //EXTRACT HIGH NIBBLE
-    output_data &= (0X3C); // clear D4-D7
-    output_data |= ((data & 0xF0) >> 4) << 2; // we shift the high nibble 4 bits to the right and then shift it to the left to match D4-D7
-    PCA9555_0_write(REG_OUTPUT_0,output_data); // write high nibble to PCA9555
-
-    //PULSE ENABLE PIN
-    PCA9555_0_write(REG_OUTPUT_0,output_data | (1<<LCD_E)); // rising edge
-    _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_0,output_data & ~(1<<LCD_E)); // falling edge
-
-    //EXTRACT LOW NIBBLE
-    output_data &= (0X3C); // clear D4-D7
-    output_data |= (data & 0x0F) << 2; // we shift the low nibble to the left to match D4-D7
-    PCA9555_0_write(REG_OUTPUT_0,output_data); // write low nibble to PCA9555
-
-    //PULSE ENABLE PIN
-    PCA9555_0_write(REG_OUTPUT_0,output_data | (1<<LCD_E)); // rising edge
-    _delay_us(1);
-    PCA9555_0_write(REG_OUTPUT_0,output_data & ~(1<<LCD_E)); // falling edge
-    _delay_us(1);
-}
-
-void lcd_data(uint8_t data){
-    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
-    current_data |= (1<<LCD_RS); // set RS to 1
-    PCA9555_0_write(REG_OUTPUT_0,current_data); // write data to PCA9555
-    write_2_nibbles(data); // write data to LCD
-    _delay_us(250); // delay for data write
-}
-
-void lcd_command(uint8_t command){
-    uint8_t current_data = PCA9555_0_read(REG_OUTPUT_0); // read current data from PCA9555
-    current_data &= ~(1<<LCD_RS); // set RS to 0
-    PCA9555_0_write(REG_OUTPUT_0,current_data); // write data to PCA9555
-    write_2_nibbles(command);
-    _delay_us(250);
-}
-
-void lcd_clear_display(void){
-    lcd_command(0x01); // clear display
-    _delay_ms(5); // delay for clear display
-}
-
-void lcd_init(void){
-    _delay_ms(200); // wait for power up
+void write2(unsigned char input) {
+    unsigned char prev = PREVIOUS;
     
-    //8BIT MODE INITIALIZATION - ENABLE PULSE
-    lcd_command(0x30);
-
-    //8BIT MODE INITIALIZATION - ENABLE PULSE - 2ND TIME
-    lcd_command(0x30);
-
-    //8BIT MODE INITIALIZATION - ENABLE PULSE - 3RD TIME
-    lcd_command(0x30);
-
-    //4BIT MODE INITIALIZATION
-    lcd_command(0x20);
-    _delay_us(250);
-
-    //FUNCTION SET 4BIT MODE | 2 LINES | 5X8 DOTS
-    lcd_command(0x28);
-
-    //DISPLAY ON | CURSOR OFF
-    lcd_command(0x0C);
-
-    //clear display
-    lcd_clear_display();
-
-    //entry mode set: Increment address, no display shift
-    lcd_command(0x06);
-
+    unsigned char write = (input & 0xF0) | (prev & 0x0F);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    write |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    write &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, write);
+        
+    write = ((input & 0x0F) << 4) | (prev & 0x0F);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    write |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    write &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, write);
 }
 
-void lcd_string(char *str){
-    while(*str){
-        lcd_data(*str++);
+void lcd_data(unsigned char input) {
+    unsigned char prev = PREVIOUS;
+    prev |= (1<<2);
+    
+    PCA9555_0_write(REG_OUTPUT_0, prev);
+    write2(input);
+    _delay_us(250);
+}
+
+void lcd_command(unsigned char input) {
+    unsigned char prev = PREVIOUS;
+    prev &= 0b11111011;
+    
+    PCA9555_0_write(REG_OUTPUT_0, prev);
+    write2(input);
+    _delay_us(250);
+}
+
+void lcd_nextline() {
+    lcd_command(0b11000000);
+}
+
+void lcd_clear() {
+    lcd_command(0x01);
+    _delay_ms(5);
+}
+
+void lcd_init() {
+    _delay_ms(200);
+    
+    // Switch to 8bit mode
+    unsigned char write = 0x30;
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    unsigned char temp = write;
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    _delay_us(250);
+    
+    temp = write;
+    
+    // Switch to 8bit mode
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    _delay_us(250);
+    
+    temp = write;
+    
+    // Switch to 8bit mode
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    _delay_us(250);
+    
+    // Switch to 8bit mode
+    write = 0x20;
+    temp = write;
+    PCA9555_0_write(REG_OUTPUT_0, write);
+    
+    temp |= (1<<3);
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    temp &= 0b11110111;
+    PCA9555_0_write(REG_OUTPUT_0, temp);
+    _delay_us(250);
+    
+    lcd_command(0x28);
+    
+    lcd_command(0x0c);
+    
+    lcd_clear();
+    
+    lcd_command(0x06);
+}
+
+void lcd_string(const char *str) {
+    while (*str) {             // Loop until null terminator
+        lcd_data(*str++);      // Send each character to the LCD
     }
 }
 

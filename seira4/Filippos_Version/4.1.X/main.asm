@@ -9,12 +9,22 @@
 .org 0x2A ; ADC Conversion Complete Interrupt
     rjmp ADC_ISR
     
-.def ADC_VALUE_LOW = r30
-.def ADC_VALUE_HIGH = r31
+.def ADC_VALUE_LOW = r28
+.def ADC_VALUE_HIGH = r29
+.def temp = r17
 
 .equ FOSC_MHZ=16
 .equ DEL_mS=1000
 .equ F1=FOSC_MHZ*DEL_mS
+
+.equ PD0=0
+.equ PD1=1
+.equ PD2=2
+.equ PD3=3
+.equ PD4=4
+.equ PD5=5
+.equ PD6=6
+.equ PD7=7
 
 reset:
     ; Initialize Stack Pointer
@@ -42,9 +52,9 @@ main:
     ; Enable Timer1 Overflow Interrupt | We want one interrupt each second
     ;65536-15625=49911=0xC287
     ldi r17, HIGH(49911)
-    out TCNT1H, r17
+    sts TCNT1H, r17
     ldi r17, LOW(49911)
-    out TCNT1L, r17
+    sts TCNT1L, r17
 
     ldi r24, (1<<TOIE1) ;ENABLE Interrupt Overflow Timer1 
     sts TIMSK1, r24 
@@ -64,119 +74,169 @@ main:
 
 ;===ADC INTERRUPT SERVICE ROUTINE===
 ISR_TIMER1_OVF: ;We start the ADC conversion and we wait for the result
-    sbi ADCSRA, ADSC ; Start ADC conversion
+    lds temp, ADCSRA ;
+    ori temp, (1<<ADSC) ; Set ADSC flag of ADCSRA
+    sts ADCSRA, temp 
     ldi r17, HIGH(49911)
-    out TCNT1H, r17
+    sts TCNT1H, r17
     ldi r17, LOW(49911)
-    out TCNT1L, r17
+    sts TCNT1L, r17
     reti
 
 ADC_ISR: ;When the conversion is complete the interrupt brings us and we read the ADC values
-    push r16
-    push r17
-    push r18
-    push r19
+    push r31
+    push r30
+    push r29
+    push r28
     push r20
     push r21
     push r22
     push r23
-    push r24   
-    push r27
-    push r28
-    push r29
-    push r30
-    push r31
-
     lds ADC_VALUE_LOW, ADCL
     lds ADC_VALUE_HIGH, ADCH
     
     ;Adif is set to 1 when the conversion is complete by the vector itself
     ;Until here we have: Setup the ADC, the Overflow Timer, Started the ADC conversion, Wait for the ADC conversion to complete, Read the ADC value
     ;What's left to do below is: Multiply by 5, divide by 1024, and display the result on the LCD
-    ;r31:r30 holds the ADC value r31 High Byte r30 Low Byte
-    ;Multiply by 5
-
-    mov r29, ADC_VALUE_HIGH ;r29:r28 = ADC_VALUE
-    mov r28 , ADC_VALUE_LOW ;r29:r28 = ADC_VALUE
-
-    lsl r28 ;r28=r28*2
-    rol r29 ;r29=r29*2 + carry
-    lsl r28 ;r28=r28*4
-    rol r29 ;r29=r29*4 + carry
-
-    add r28, r30 ;r28=r28+ADC_VALUE_LOW
-    adc r29, r31 ;r29=r29+ADC_VALUE_HIGH + carry
-
-    ;Multiplication by 5 has been done
-
-    ;Multiplying by 8 is the same as multiplying by 2 three times
-    ;So we will multiply by 2 three times
-    lsl r28 ;r28=r28*2
-    rol r29 ;r29=r29*2 + carry
-    lsl r28 ;r28=r28*4
-    rol r29 ;r29=r29*4 + carry
-    lsl r28 ;r28=r28*8
-    rol r29 ;r29=r29*8 + carry
-
-    ;Multiplication by 8 has been done
-    ;Now we need to multiply by 125 to get 5*8*125=5000
-    ;stored in pair r29:r28
-    ;we move r29 to r26 and r28 to r25 and we keep r27 for the higher byte of the result
-    mov r26, r29
-    mov r25, r28
-    clr r27
-
-    ldi r24, 7
-
-    multiply_by_128_loop:
-    lsl r25                 ; Shift left
-    rol r26                ; Rotate through carry
-    rol r27                 ; Rotate through carry
-    dec r24                 ; Decrement shift counter
-    brne multiply_by_128_loop ; Repeat until 7 shifts are done
     
-    ; Now, r27:r26:r25 holds ADC_VALUE * 40 * 128
+    mov r31, ADC_VALUE_HIGH ; Move the high byte of the ADC value to r31
+    mov r30, ADC_VALUE_LOW ; Move the low byte of the ADC value to r30
 
-    ; Now we need to divide by 1024
+    ; Multiply by 4
+
+    clc
+    rol r28
+    rol r29
+    clc
+    rol r28
+    rol r29
     
-    ; Initialize shift counter for division by 1024 (10 shifts)
-    ldi r24, 10              ; Load immediate value 10 into r24
+    ; add original value to the result to get MULTIPLY BY 5
+    add r28, r30
+    adc r29, r31    
 
-    divide_by_1024_loop:
-    lsr r25                  ; Logical Shift Right r25
-    ror r26                  ; Rotate Right r26 through carry
-    ror r27                  ; Rotate Right r27 through carry
-    dec r24                  ; Decrement shift counter
-    brne divide_by_1024_loop ; Branch if not equal to zero
+    ;we have value multiplied by 5 in r28 and r29
+    ;we now want to multiply by 100
+    ldi r20,100
+    mul r28,r20 
+    mov r21,r0
+    mov r22,r1
+    clr r0
+    clr r1
+    ;we have value low_value multiplied by 100 in r21 and r22
+    clr r23
+
+    mul r29,r20
+    add r22,r0
+    adc r23,r1
+    ;we have value high_value multiplied by 100 in r22 and r23
+    ;r23:r22:r21 is the result of the multiplication by 100 of adc_value*5
+
+    ;we now want to divide by 1024
+    ldi r20,10 ;right shift 10 times
+
+    div_loop:
+        lsr r23    ; Shift MSB
+        ror r22    ; Rotate into middle byte
+        ror r21    ; Rotate into LSB
+        dec r20    ; Decrement counter
+        brne div_loop   ; If not done, loop
+
+    ; we now have the result in r22:r21 and we want to get hundreds, tens and units
+
+    clr r19 ;hundreds
+    clr r18 ;tens
+    clr r17 ;units
     
-    clr r27                 ; Clear r27 to zero because we don't need it anymore because max value fits 2 registers
+    ldi r23,low(100)
+    ldi r24,high(100)
+    mov r25,r21
+    mov r26,r22 ;r26:r25 is the result
 
-    ; Now, r26:r25 holds the result of ADC_VALUE * 40 * 128 / 1024 = ADC_VALUE * 5
-    ;move the result to r11:
-    mov r11, r26
-    mov r10, r25
+    div_by_100:
+            
+        cp r26,r24 ;compare high byte
+        cpc r25,r23 ;compare low byte
+        brlo div_by_10 ;if result is less than 100 then divide by 10
 
-    ; Now we need to display the result on the LCD
-    ; We will display the result in format x.yy
-    ; We call routine to calculate the integer part of the result, and then the fractional part
-    ; and then display
-    ; r10:r11 holds the result
-    rcall convert_and_display
+        ;else divide by 100
+        subi r25, low(100)
+        sbci r26, high(100)
 
-    pop r31
-    pop r30
-    pop r29
-    pop r28
-    pop r27
-    pop r24
+        ;increment hundreds
+        inc r19
+
+        ;initiate loop
+        rjmp div_by_100
+
+    div_by_10:
+        ldi r23,low(10)
+        ldi r24,high(10)
+        cp r26,r24 ;compare high byte
+        cpc r25,r23 ;compare low byte
+        brlo div_by_1 ;if result is less than 10 then divide by 1
+
+        ;else divide by 10
+        subi r25, low(10)
+        sbci r26, high(10)
+
+        ;increment tens
+        inc r18
+
+        ;initiate loop
+        rjmp div_by_10
+
+    div_by_1:
+    ldi r23,low(1)
+    ldi r24,high(1)
+
+    cp r26,r24 ;compare high byte
+    cpc r25,r23 ;compare low byte
+    brlo display_result ;if result is less than 1 then display result
+
+    ;else divide by 1
+    subi r25, low(1)
+    sbci r26, high(1)
+
+    ;increment units
+    inc r17
+
+    ;initiate loop
+    rjmp div_by_1
+
+    display_result:
+    ; Convert digits to ASCII
+    ldi r23, '0'      ; ASCII value of '0' (0x30)
+
+    add r19, r23      ; Hundreds digit to ASCII
+    add r18, r23      ; Tens digit to ASCII
+    add r17, r23      ; Units digit to ASCII
+
+    mov r24, r19      ; Hundreds digit to r24
+    rcall lcd_data    ; Display hundreds digit
+
+    ldi r24, '.'      ; Display '.' character
+    rcall lcd_data
+
+    mov r24, r18      ; Tens digit to r24
+    rcall lcd_data    ; Display tens digit
+    
+    mov r24, r17      ; Units digit to r24
+    rcall lcd_data    ; Display units digit
+
+    ; Display 'V' character
+    ldi r24, 'V'
+    rcall lcd_data
+    
     pop r23
     pop r22
     pop r21
     pop r20
-    pop r19
-    pop r18
-    pop r17
-    pop r16
+    pop r29
+    pop r28
+    pop r30
+    pop r31
+
     reti
 
 write_2_nibbles: 
@@ -230,7 +290,7 @@ lcd_clear_display:
      
     ldi r24 ,low(5)  ; 
     ldi r25 ,high(5)  ; Wait 5 mSec 
-    rcall wait_msec  ; 
+    rcall wait_x_msec  ; 
      
     ret
 
@@ -239,7 +299,7 @@ lcd_init:
  
     ldi r24 ,low(200)   ; 
     ldi r25 ,high(200)  ; Wait 200 mSec 
-    rcall wait_msec  ; 
+    rcall wait_x_msec  ; 
     
     ldi r24 ,0x30    ; command to switch to 8 bit mode 
     out PORTD ,r24  ; 
@@ -291,142 +351,6 @@ lcd_init:
     ldi r24 ,0x06                ; Increase address, no display shift 
     rcall lcd_command         ;
     ret
-
-; === convert_and_display Routine ===
-; Description:
-;   - Converts a 16-bit scaled value in r11:r10 into thousands (X), hundreds (Y), tens (Z)
-;     and formats it as "X.YZV" on the LCD.
-; Registers Used:
-;   - r16: Thousands digit (X)
-;   - r17: Hundreds digit (Y)
-;   - r18: Tens digit (Z)
-;   - r19: Temporary for remainder
-;   - r20: Temporary for calculations
-;   - r21: Temporary for calculations
-;   - r22: Temporary for calculations
-;   - r23: Temporary for calculations
-;   - r24: Holds current character to send to LCD
-;   - r25: Temporary register
-; Assumptions:
-;   - r11:r10 contains the scaled 16-bit value (e.g., 511 represents 5.11V)
-;   - lcd_data routine is available to send a single ASCII character to the LCD
-
-convert_and_display:
-    ; Preserve used registers
-    push r16
-    push r17
-    push r18
-    push r19
-    push r20
-    push r21
-    push r22
-    push r23
-    push r24
-    push r25
-
-    ; Initialize digit registers to 0
-    clr r16        ; X = Thousands digit
-    clr r17        ; Y = Hundreds digit
-    clr r18        ; Z = Tens digit
-
-    ; Load the scaled value into temporary registers
-    mov r22, r11    ; High byte of scaled value
-    mov r23, r10    ; Low byte of scaled value
-
-    ; === Step 1: Extract Thousands Digit (X) ===
-divide_by_1000:
-    ; Compare r22:r23 with 1000 (0x03E8)
-    ldi r20, 0x03       ; High byte of 1000
-    ldi r21, 0xE8       ; Low byte of 1000
-    cp r22, r20
-    cpc r23, r21
-    brlo done_divide_1000 ; If r22:r23 < 1000, skip subtraction
-
-    ; Subtract 1000 from r22:r23
-    subi r23, 0xE8        ; r23 = r23 - 0xE8
-    sbci r22, 0x03        ; r22 = r22 - 0x03 - borrow
-    inc r16               ; X = X + 1
-    rjmp divide_by_1000    ; Repeat until r22:r23 < 1000
-
-done_divide_1000:
-    ; === Step 2: Extract Hundreds Digit (Y) ===
-divide_by_100:
-    ; Compare r22:r23 with 100 (0x0064)
-    ldi r20, 0x00       ; High byte of 100
-    ldi r21, 0x64       ; Low byte of 100
-divide_hundreds_loop:
-    cp r22, r20
-    cpc r23, r21
-    brlo done_divide_100   ; If r22:r23 < 100, skip subtraction
-
-    ; Subtract 100 from r22:r23
-    subi r23, 0x64        ; r23 = r23 - 0x64
-    sbci r22, 0x00        ; r22 = r22 - 0x00 - borrow
-    inc r17               ; Y = Y + 1
-    rjmp divide_hundreds_loop ; Repeat until r22:r23 < 100
-
-done_divide_100:
-    ; === Step 3: Extract Tens Digit (Z) ===
-divide_by_10:
-    ; Compare r22:r23 with 10 (0x000A)
-    ldi r20, 0x00       ; High byte of 10
-    ldi r21, 0x0A       ; Low byte of 10
-divide_tens_loop:
-    cp r22, r20
-    cpc r23, r21
-    brlo done_divide_10     ; If r22:r23 < 10, skip subtraction
-
-    ; Subtract 10 from r22:r23
-    subi r23, 0x0A        ; r23 = r23 - 0x0A
-    sbci r22, 0x00        ; r22 = r22 - 0x00 - borrow
-    inc r18               ; Z = Z + 1
-    rjmp divide_tens_loop  ; Repeat until r22:r23 < 10
-
-done_divide_10:
-    ; Now, r22:r23 holds the remainder after dividing by 10 (units digit, not used here)
-
-    ; === Step 4: Convert Digits to ASCII ===
-    ; Convert Thousands Digit (X) to ASCII
-    add r16, '0'          ; X += ASCII '0'
-    mov r24, r16          ; Move to r24 for lcd_data
-    rcall lcd_data        ; Send 'X' to LCD
-
-    ; Send Decimal Point '.'
-    ldi r24, '.'          ; ASCII for '.'
-    rcall lcd_data        ; Send '.' to LCD
-
-    ; Convert Hundreds Digit (Y) to ASCII
-    add r17, '0'          ; Y += ASCII '0'
-    mov r24, r17          ; Move to r24 for lcd_data
-    rcall lcd_data        ; Send 'Y' to LCD
-
-    ; Convert Tens Digit (Z) to ASCII
-    add r18, '0'          ; Z += ASCII '0'
-    mov r24, r18          ; Move to r24 for lcd_data
-    rcall lcd_data        ; Send 'Z' to LCD
-
-    ; Append 'V' for Voltage
-    ldi r24, 'V'          ; ASCII for 'V'
-    rcall lcd_data        ; Send 'V' to LCD
-
-    ; === Optional: Handle Units Digit if Needed ===
-    ; If you want to display units (e.g., X.YZ), you can extract and display them similarly.
-    ; For this implementation, only X.YZ is displayed.
-
-    ; === Step 5: Restore Preserved Registers ===
-    pop r25
-    pop r24
-    pop r23
-    pop r22
-    pop r21
-    pop r20
-    pop r19
-    pop r18
-    pop r17
-    pop r16
-
-    ret                   ; Return from routine
-
 
 wait_x_msec:
     push r23
