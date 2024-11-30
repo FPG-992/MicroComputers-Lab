@@ -448,18 +448,22 @@ int main(void) {
         binary_to_bcd(integer);
         
         lcd_clear();
-        if (negative_sign) lcd_data('-');
+        if (negative_sign) {
+            lcd_data('-');
+        } else {
+            lcd_data('+');
+        }
         
         if (hundreds != 0) display_number(hundreds);
         if (tens != 0 || hundreds != 0) display_number(tens);
         display_number(units);
-//        lcd_data('.');
-//        
-//        binary_to_bcd(decimal);
-//        display_number(thousands);
-//        display_number(hundreds);
-//        display_number(tens);
-//        display_number(units);
+        lcd_data('.');
+        
+        binary_to_bcd(decimal);
+        display_number(thousands);
+        display_number(hundreds);
+        display_number(tens);
+        display_number(units);
         lcd_data(0b11011111);
         lcd_data('C');
         
