@@ -14,9 +14,42 @@
 //Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
 
-#define TEMP_OFFSET 13.0
+#define TEMP_OFFSET 9.0
 
-uint8_t PREVIOUS = 0;
+char buffer[50];
+uint8_t buffer_pointer = 0;
+
+const char success[] = "\"Success\"";
+
+void init_buffer() {
+    for (uint8_t i = 0; i < 50; i++) {
+        buffer[i] = '/0';
+    }
+    buffer_pointer = 0;
+}
+
+void write_buffer(char c) {
+    buffer[buffer_pointer] = c;
+    buffer_pointer++;
+    
+    if (buffer_pointer == 50) buffer_pointer = 0;
+}
+
+void display_buffer() {
+    for (uint8_t i = 0; i < buffer_pointer; i++) {
+        lcd_data(buffer[i]);
+    }
+}
+
+uint8_t success_fail_buffer() {
+    if (buffer_pointer < 2) return 0;
+    for (uint8_t i = 0; i < 2; i++) {
+        if (buffer[i] != success[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 void usart_init(uint16_t ubrr) {
     UCSR0A = 0;
@@ -31,7 +64,7 @@ void usart_transmit(uint8_t data) {
     UDR0 = data;
 }
 
-uint8_t usart_receive() {
+char usart_receive() {
     while (!(UCSR0A & (1<<RXC0)));
     return UDR0;
 }
@@ -47,13 +80,13 @@ void transmit_string(char arr[]) {
 }
 
 uint8_t receive_success_fail() {
-    uint8_t first_letter = usart_receive();
-    uint8_t letter = usart_receive();
-    while (letter != "\n") {
+    init_buffer();
+    char letter = usart_receive();
+    while (letter != '\n') {
+        write_buffer(letter);
         letter = usart_receive();
     }
-    if (first_letter == "S") return 1;
-    return 0;
+    return success_fail_buffer();
 }
 
 // PCA9555 REGISTERS
@@ -347,10 +380,6 @@ void display_string(char arr[]) {
     }
 }
 
-void lcd_nextline() {
-    lcd_command(0b11000000);
-}
-
 // Temperature Functions
 // Returns 1 if device is detected, 0 if no.
 uint8_t one_wire_reset() {
@@ -513,7 +542,6 @@ double get_pressure() {
     while ((ADCSRA & (1<<ADSC)) != 0);
 
     // Processing
-    uint16_t input = ADC;
     double pressure = ADC * 20;
     pressure = pressure / 1024;
     
@@ -576,9 +604,12 @@ int main(void) {
         
     // Configure EXT_PORT1 as output
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
+    PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
     
     // Enable LCD
     lcd_init();
+    
+    init_buffer();
     
     // POT0 ADC Setup
     ADMUX = (1<<REFS0);
@@ -588,22 +619,39 @@ int main(void) {
     
     uint8_t nurseStatus = 0;
     
+    transmit_string("ESP:restart\n");
+    char letter = usart_receive();
+    while (letter != '\n') {
+        letter = usart_receive();
+    }
+    letter = usart_receive();
+    while (letter != '\n') {
+        letter = usart_receive();
+    }
+    
     while (1) {
         lcd_clear();
         transmit_string("ESP:connect\n");
 
         if (!receive_success_fail()) {
             display_string("1.Fail");
-            transmit_string("ESP:connect");
+            lcd_nextline();
+            display_string("Rec:");
+            display_buffer();
+            _delay_ms(1000);
+            transmit_string("ESP:connect\n");
             if (receive_success_fail()) {
                 lcd_clear();
             } else {
-                _delay_ms(1000);
                 continue;
             }
         }
         display_string("1.Success");
         lcd_nextline();
+        display_string("Rec:");
+        display_buffer();
+        
+        _delay_ms(1000);
         
         transmit_string("ESP:url:\"");
         
@@ -611,16 +659,26 @@ int main(void) {
         
         transmit_string("\"\n");
         
+        lcd_clear();
+        
         if (receive_success_fail()) {
             display_string("2.Success");
         } else {
             display_string("2.Fail");
+            lcd_nextline();
+            display_string("Rec:");
+            display_buffer();
             _delay_ms(1000);
             continue;
         }
         
+        lcd_nextline();
+        display_string("Rec:");
+        display_buffer();
+        
+        _delay_ms(1000);
+        
         double temp = get_temp();
-        display_string(" | ");
         double pressure = get_pressure();
         
         char pressed_char = keypad_to_ascii(scan_keypad());
@@ -630,9 +688,7 @@ int main(void) {
             nurseStatus = 0;
         }
         
-        lcd_clear();
-        
-        transmit_string("ESP:payload:[{\"name\": \"temperature\", \"value\": \"")
+        transmit_string("ESP:payload:[{\"name\": \"temperature\", \"value\": \"");
         
         transmit_temp(temp);
         
@@ -654,6 +710,8 @@ int main(void) {
         
         transmit_string("\"}]\n");
         
+        lcd_clear();
+        
         if (receive_success_fail()) {
             display_string("3.Success");
         } else {
@@ -664,15 +722,27 @@ int main(void) {
         
         lcd_nextline();
         
-        transmit_string("ESP:transmit\n");
-        
-        display_string('4. ');
-        char readChar = usart_receive();
-        while (readChar != '\n') {
-            lcd_data(readChar);
-            readChar = usart_receive();
-        }
+        display_string("Rec:");
+        display_buffer();
         
         _delay_ms(1000);
+        
+        transmit_string("ESP:transmit\n");
+        
+        lcd_clear();
+        
+        display_string("4.Success");
+        lcd_nextline();
+        init_buffer();
+
+        char readChar = usart_receive();
+        while (readChar != '\n') {
+            write_buffer(readChar);
+            readChar = usart_receive();
+        }
+
+        display_buffer();
+        
+        _delay_ms(5000);
     }
 }

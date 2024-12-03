@@ -16,8 +16,6 @@
 
 #define TEMP_OFFSET 13.0
 
-uint8_t PREVIOUS = 0;
-
 void usart_init(uint16_t ubrr) {
     UCSR0A = 0;
     UCSR0B = (1<<RXEN0) | (1<<TXEN0);
@@ -31,7 +29,7 @@ void usart_transmit(uint8_t data) {
     UDR0 = data;
 }
 
-uint8_t usart_receive() {
+char usart_receive() {
     while (!(UCSR0A & (1<<RXC0)));
     return UDR0;
 }
@@ -47,12 +45,12 @@ void transmit_string(char arr[]) {
 }
 
 uint8_t receive_success_fail() {
-    uint8_t first_letter = usart_receive();
-    uint8_t letter = usart_receive();
-    while (letter != "\n") {
+    char first_letter = usart_receive();
+    char letter = usart_receive();
+    while (letter != '\n') {
         letter = usart_receive();
     }
-    if (first_letter == "S") return 1;
+    if (first_letter == 'S') return 1;
     return 0;
 }
 
@@ -347,10 +345,6 @@ void display_string(char arr[]) {
     }
 }
 
-void lcd_nextline() {
-    lcd_command(0b11000000);
-}
-
 // Temperature Functions
 // Returns 1 if device is detected, 0 if no.
 uint8_t one_wire_reset() {
@@ -556,9 +550,9 @@ void display_temp(double input) {
 
     binary_to_bcd(decimal);
     display_number(thousands);
-    display_number(hundreds);
-    display_number(tens);
-    display_number(units);
+//    display_number(hundreds);
+//    display_number(tens);
+//    display_number(units);
     lcd_data(0b11011111);
     lcd_data('C');
 }
@@ -575,9 +569,9 @@ void display_pressure(double input) {
 
     binary_to_bcd(decimal);
     display_number(thousands);
-    display_number(hundreds);
-    display_number(tens);
-    display_number(units);
+//    display_number(hundreds);
+//    display_number(tens);
+//    display_number(units);
 }
 
 int main(void) {
@@ -586,6 +580,7 @@ int main(void) {
         
     // Configure EXT_PORT1 as output
     PCA9555_0_write(REG_CONFIGURATION_0, 0x00);
+    PCA9555_0_write(REG_CONFIGURATION_1, 0b11110000);
     
     // Enable LCD
     lcd_init();
@@ -604,7 +599,7 @@ int main(void) {
 
         if (!receive_success_fail()) {
             display_string("1.Fail");
-            transmit_string("ESP:connect");
+            transmit_string("ESP:connect\n");
             if (receive_success_fail()) {
                 lcd_clear();
             } else {
@@ -628,7 +623,6 @@ int main(void) {
         }
         
         double temp = get_temp();
-        display_string(" | ");
         double pressure = get_pressure();
         
         char pressed_char = keypad_to_ascii(scan_keypad());
@@ -641,6 +635,10 @@ int main(void) {
         lcd_clear();
         
         display_temp(temp);
+        display_string(" | ");
+//        lcd_data(0b00100000);
+//        lcd_data(0b01111100);
+//        lcd_data(0b00100000);
         display_pressure(pressure);
         
         lcd_nextline();
@@ -655,6 +653,6 @@ int main(void) {
             display_string("OK");
         }
         
-        _delay_ms(1000);
+        _delay_ms(10000);
     }
 }

@@ -14,8 +14,6 @@
 //Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
 
-uint8_t PREVIOUS = 0;
-
 void usart_init(uint16_t ubrr) {
     UCSR0A = 0;
     UCSR0B = (1<<RXEN0) | (1<<TXEN0);
@@ -29,7 +27,7 @@ void usart_transmit(uint8_t data) {
     UDR0 = data;
 }
 
-uint8_t usart_receive() {
+char usart_receive() {
     while (!(UCSR0A & (1<<RXC0)));
     return UDR0;
 }
@@ -45,12 +43,12 @@ void transmit_string(char arr[]) {
 }
 
 uint8_t receive_success_fail() {
-    uint8_t first_letter = usart_receive();
-    uint8_t letter = usart_receive();
-    while (letter != "\n") {
+    char first_letter = usart_receive();
+    char letter = usart_receive();
+    while (letter != '\n') {
         letter = usart_receive();
     }
-    if (first_letter == "S") return 1;
+    if (first_letter == 'S') return 1;
     return 0;
 }
 
@@ -345,10 +343,6 @@ void display_string(char arr[]) {
     }
 }
 
-void lcd_nextline() {
-    lcd_command(0b11000000);
-}
-
 int main(void) {
     // Enable TWI Communication for LCD
     twi_init();
@@ -367,7 +361,7 @@ int main(void) {
 
         if (!receive_success_fail()) {
             display_string("1.Fail");
-            transmit_string("ESP:connect");
+            transmit_string("ESP:connect\n");
             if (receive_success_fail()) {
                 lcd_clear();
             } else {
@@ -385,7 +379,7 @@ int main(void) {
         transmit_string("\"\n");
         
         if (receive_success_fail()) {
-            display_string("2.Sucess");
+            display_string("2.Success");
         } else {
             display_string("2.Fail");
         }

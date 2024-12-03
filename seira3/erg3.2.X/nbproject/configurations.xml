@@ -144,6 +144,11 @@
         <property key="program-the-device-with-default-config-words" value="false"/>
         <property key="remove-unused-sections" value="true"/>
       </HI-TECH-LINK>
+      <Tool>
+        <property key="memories.programmemory.ranges" value="0-3fff"/>
+        <property key="programmerToGoFilePath"
+                  value="C:/Users/chris/Desktop/UNI/ergmicro/seira3/erg3.2.X/debug/default/erg3.2_ptg"/>
+      </Tool>
       <XC8-CO>
         <property key="coverage-enable" value=""/>
         <property key="stack-guidance" value="false"/>
