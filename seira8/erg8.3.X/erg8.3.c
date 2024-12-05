@@ -22,9 +22,6 @@ uint8_t buffer_pointer = 0;
 const char success[] = "\"Success\"";
 
 void init_buffer() {
-    for (uint8_t i = 0; i < 50; i++) {
-        buffer[i] = '/0';
-    }
     buffer_pointer = 0;
 }
 
@@ -54,8 +51,8 @@ uint8_t success_fail_buffer() {
 void usart_init(uint16_t ubrr) {
     UCSR0A = 0;
     UCSR0B = (1<<RXEN0) | (1<<TXEN0);
-    UBRR0H = (uint8_t) (ubrr>>8);
-    UBRR0L = (uint8_t) ubrr;
+    UBRR0H = (unsigned char) (ubrr>>8);
+    UBRR0L = (unsigned char) ubrr;
     UCSR0C = (3 << UCSZ00);    
 }
 

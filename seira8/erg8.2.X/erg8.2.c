@@ -14,7 +14,39 @@
 //Fscl=Fcpu/(16+2*TWBR0_VALUE*PRESCALER_VALUE)
 #define TWBR0_VALUE ((F_CPU/SCL_CLOCK)-16)/2
 
-#define TEMP_OFFSET 13.0
+#define TEMP_OFFSET 9.0
+
+char buffer[50];
+uint8_t buffer_pointer = 0;
+
+const char success[] = "\"Success\"";
+
+void init_buffer() {
+    buffer_pointer = 0;
+}
+
+void write_buffer(char c) {
+    buffer[buffer_pointer] = c;
+    buffer_pointer++;
+    
+    if (buffer_pointer == 50) buffer_pointer = 0;
+}
+
+void display_buffer() {
+    for (uint8_t i = 0; i < buffer_pointer; i++) {
+        lcd_data(buffer[i]);
+    }
+}
+
+uint8_t success_fail_buffer() {
+    if (buffer_pointer < 2) return 0;
+    for (uint8_t i = 0; i < 2; i++) {
+        if (buffer[i] != success[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 void usart_init(uint16_t ubrr) {
     UCSR0A = 0;
@@ -45,13 +77,13 @@ void transmit_string(char arr[]) {
 }
 
 uint8_t receive_success_fail() {
-    char first_letter = usart_receive();
+    init_buffer();
     char letter = usart_receive();
     while (letter != '\n') {
+        write_buffer(letter);
         letter = usart_receive();
     }
-    if (first_letter == 'S') return 1;
-    return 0;
+    return success_fail_buffer();
 }
 
 // PCA9555 REGISTERS
@@ -590,6 +622,8 @@ int main(void) {
     ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
     
     usart_init(UBRR_VALUE);
+    
+    init_buffer();
     
     uint8_t nurseStatus = 0;
     
