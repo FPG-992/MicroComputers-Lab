@@ -1,6 +1,32 @@
 ## Configure input and output in ASM and C
 
+    ```
+    ; Set PORTD as input
+    ser r24		; r24 = 0xFF
+    out DDRD,r24	; Set DDRD as output
+    
+    out PORTD,pos	; Output initial position.
+    ```
 
+    ```
+    Input
+    ; Set PORTD as input
+    clr r24
+    out DDRD,r24
+    in r23, pind
+    ```
+
+    ```
+    // set PORTD to an input
+    DDRD = 0x00;
+    PORTD = 0xFF;
+    ```
+
+    ```
+    // set PORTD to an output
+    DDRD = 0b00111111;
+    PORTD = 0b11000000;
+    ```
 ## How do we convert Binary to BCD?
 
 Η μετατροπή από δυαδικό σε BCD (Binary Coded Decimal) γίνεται με την εξαγωγή των ψηφίων εκατοντάδων, δεκάδων και μονάδων, ακολουθώντας μια διαδικασία διαδοχικών αφαιρέσεων και συγκρίσεων.

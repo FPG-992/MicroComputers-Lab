@@ -1,0 +1,4478 @@
+﻿******************************************************************
+
+BLOCK ΚΩΔΙΚΑ AVR
+
+******************************************************************
+ΒΑΣΙΚΗ ΔΟΜΗ ΠΡΟΓΡΑΜΜΑΤΟΣ
+
+;IF DDRx IS SET TO 0 => X IS INPUT PORT, IF SET TO 1 => X IS OUTPUT PORT
+;r16-r31
+;thetikis logikis
+
+;-------------------------------
+;vasiki domi programmatos
+.INCLUDE "m16def.inc"
+
+;.def temp=r16
+
+.org 0x0000
+    jmp reset
+.org 0x0002
+    jmp INT0
+.org 0x0004
+    jmp INT1
+.org 0x010
+    jmp TIMER1
+    reti
+
+.DSEG 
+_tmp_: .byte 2
+.CSEG
+
+reset:
+;Create Stack
+    ldi r24,LOW(RAMEND)
+    out SPL,r24
+    ldi r25,HIGH(RAMEND)
+    out SPH,r25
+
+;Enable INT0,INT1
+    ldi r24,(1<<INT0)|(1<<INT1)    ;energopoiisi INT0/INT1
+    out GICR,r24
+    ldi r24,(1<<ISC01)|(1<<ISC00)|(1<<ISC11)|(1<<ISC10)
+    out MCUCR,r24
+
+;Activate all interrupts
+    sei    
+
+;Enable timer1
+    ldi r24,1<<TOIE1
+    out TIMSK,r24
+
+;easyAVR6 CLK = 8MHz  8Mhz/1024=7812.5Hz
+;we want overflow interrupt signal after 3 sec so
+;timer must count 3*7812.5=23437.5 cycles
+;65536-23437.5=42098.5=0xA472 start timer value
+
+;Timer frequency
+    ldi r24,(1<<CS12)|(0<<CS11)|(1<<CS10)
+    out TCCR1B,r24
+;3(->A472H) seconds delay (gia allo delay upologismo apo panw)
+    ldi r24,0xA4
+    out TCNT1H,r24
+    ldi r24,0x72
+    out TCNT1L,r24
+
+    ;Clear LEDs
+    ;Set all ports for output/input (1/0)
+    ser r24    ;output
+    ;clr r24   ;input
+    out DDRA,r24
+    out DDRB,r24
+    out DDRC,r24
+    out DDRD,r24
+
+    ;arxikopoiisi keypad
+    ldi r24,(1 << PC7) | (1 << PC6) | (1 << PC5) | (1 << PC4)
+    out DDRC,r24 
+    call scan_keypad_rising_edge
+
+    ;arxikopoiisi lcd
+    ldi r24,(1 << PD7) | (1 << PD6) | (1 << PD5) | (1 << PD4) | (1 << PD3) | (1 << PD2)
+    out DDRD,r24
+
+start:
+
+    ;---------------
+    ;ENTER CODE HERE
+    ;---------------
+
+    rjmp start
+;-------------------------------
+
+
+;-------------------------------
+;Create a 1 second delay
+    ldi r24,low(1000)      ;or X000 for X seconds
+    ldi r25,high(1000)     ;or X000 for X seconds
+    rcall wait_msec
+;-------------------------------
+
+
+;-------------------------------
+;Interrupt0 handler
+INT_0:
+    cli         ;deactivate interrupts 
+    ;Check for double interrupts
+    push r24
+    push r25
+    ldi r24,(1<<INTF0)
+    out GIFR,r24 ;make zero bit 6 of GIFR (zero bit INTF0 if interrupt served 1 if there is new interrupt)
+    ldi r24,low(5) ;load r24:r25 with 
+    ldi r25,high(5) ;delay 5ms
+    rcall wait_msec
+    in r24,GIFR
+    andi r24,0x40 ;0100 0000
+    brne INT0 ;if bit6 not zero jump start
+    pop r25
+    pop r24
+
+    ;---------------
+    ;ENTER CODE HERE
+    ;---------------
+
+    sei         ;activate interrupts
+    reti
+;-------------------------------
+
+
+;-------------------------------
+;Timer1 handler
+TIMER1:
+    
+    ;---------------
+    ;ENTER CODE HERE
+    ;---------------
+
+    reti
+;-------------------------------
+
+
+;-------------------------------
+;diavasma keypad ki epistrofi ston r24 to ascii tou prwtou pliktrou pou exei patithei (i 0)
+    call scan_keypad_rising_edge
+    call keypad_to_ascii
+;-------------------------------
+
+
+;-------------------------------
+;ektupwsi stin othoni to r24(eg ='A') kai se paei sto epomeno simeio tis othonis
+    call lcd_data
+;-------------------------------
+
+
+;-------------------------------
+;hex sto r24 epistrofi ascii sto r24
+hex_to_ascii:
+    push r25
+    cpi r24,0x0a
+    brge sarantaena
+trianta:
+    adiw r24,0x30
+    pop r25
+    ret
+sarantaena:
+    adiw r24,0x31
+	adiw r24,0x10
+    pop r25
+    ret
+;-------------------------------
+
+
+;-------------------------------
+;print stin lcd se hex to r24
+    push r24
+    andi r24,0b11110000
+    ror r24
+    ror r24
+    ror r24
+    ror r24
+    call hex_to_ascii
+    call lcd_data
+    pop r24
+    push r24
+    andi r24,0x0f
+    call hex_to_ascii
+    call lcd_data
+    pop r24
+;-------------------------------
+
+
+;-------------------------------
+;hex ston r24 -> dec monades(r24) dekades(r25) ekatontades(r26)
+hex_to_dec:
+    ldi r25,0x0
+    ldi r26,0x0
+ekato:
+    cpi r24,0x64
+    brlt dekad
+    inc r26
+    subi r24,0x64
+    rjmp ekato
+
+dekad:
+    cpi r24,0x0a
+    brlt monad
+    inc r25
+    subi r24,0x0a
+    rjmp dekad
+monad:
+    ret
+;-------------------------------
+
+
+;-------------------------------
+;print stin lcd se dec to r24
+    push r25
+    push r26
+    call hex_to_dec
+    push r24
+    mov r24,r26
+    call hex_to_ascii
+    call lcd_data
+    mov r24,r25
+    call hex_to_ascii
+    call lcd_data
+    pop r24
+    call hex_to_ascii
+    call lcd_data
+    pop r26
+    pop r25
+;-------------------------------
+
+
+;-------------------------------
+wait_usec:
+    sbiw r24,1
+    nop
+    nop
+    nop
+    nop
+    brne wait_usec
+    ret
+;-------------------------------
+
+
+;-------------------------------
+wait_msec:
+    push r24
+    push r25
+    ldi r24,low(998)
+    ldi r25,high(998)
+    rcall wait_usec
+    pop r25
+    pop r24
+    sbiw r24,1
+    brne wait_msec
+    ret
+;-------------------------------
+
+
+;-------------------------------
+;diavasma input apo pinA sto r20
+    in r20,PINA
+;-------------------------------
+
+
+;-------------------------------
+;exodos sto portA tou r20
+    out PORTA,r20
+;-------------------------------
+
+
+;-------------------------------
+;for loop me r25:r24 epanalipseis
+FOR_LOOP_START:
+    sbiw r25:r24,1
+    brmi FOR_LOOP_END
+
+    ;---------------
+    ;ENTER CODE HERE
+    ;---------------
+
+    rjmp FOR_LOOP_START
+
+FOR_LOOP_END:
+;-------------------------------
+
+
+;-------------------------------
+scan_row:
+    ldi r25,0x08 
+back_: 
+    lsl r25 
+    dec r24 
+    brne back_
+    out PORTC,r25 
+    nop
+    nop 
+    in r24,PINC 
+    andi r24,0x0f 
+    ret 
+;-------------------------------
+
+
+;-------------------------------
+scan_keypad:
+    ldi r24,0x01 
+    rcall scan_row
+    swap r24 
+    mov r27,r24 
+    ldi r24,0x02 
+    rcall scan_row
+    add r27,r24 
+    ldi r24,0x03 
+    rcall scan_row
+    swap r24 
+    mov r26,r24 
+    ldi r24,0x04 
+    rcall scan_row
+    add r26,r24 
+    movw r24,r26 
+    ret
+;-------------------------------
+
+
+;-------------------------------
+scan_keypad_rising_edge:
+    mov r22,r24 
+    rcall scan_keypad 
+    push r24 
+    push r25
+    mov r24,r22 
+    ldi r25,0 
+    rcall wait_msec
+    rcall scan_keypad 
+    pop r23 
+    pop r22 
+    and r24,r22
+    and r25,r23
+    ldi r26,low(_tmp_)
+    ldi r27,high(_tmp_) 
+    ld r23,X+
+    ld r22,X
+    st X,r24
+    st -X,r25 
+    com r23
+    com r22 
+    and r24,r22
+    and r25,r23
+    ret
+;-------------------------------
+
+
+;-------------------------------
+keypad_to_ascii:
+    movw r26,r24 
+    ldi r24,'*'
+    sbrc r26,0
+    ret
+    ldi r24,'0'
+    sbrc r26,1
+    ret
+    ldi r24,'#'
+    sbrc r26,2
+    ret
+    ldi r24,'D'
+    sbrc r26,3 
+    ret 
+    ldi r24,'7'
+    sbrc r26,4
+    ret
+    ldi r24,'8'
+    sbrc r26,5
+    ret
+    ldi r24,'9'
+    sbrc r26,6
+    ret
+    ldi r24,'C'
+    sbrc r26,7
+    ret
+    ldi r24,'4' ;  
+    sbrc r27,0 ;
+    ret
+    ldi r24,'5'
+    sbrc r27,1
+    ret
+    ldi r24,'6'
+    sbrc r27,2
+    ret
+    ldi r24,'B'
+    sbrc r27,3
+    ret
+    ldi r24,'1'
+    sbrc r27,4
+    ret
+    ldi r24,'2'
+    sbrc r27,5
+    ret
+    ldi r24,'3'
+    sbrc r27,6
+    ret
+    ldi r24,'A'
+    sbrc r27,7
+    ret
+    clr r24
+    ret
+;-------------------------------
+
+
+;-------------------------------
+lcd_init:
+    ldi r24,40
+    ldi r25,0
+    rcall wait_msec
+    ldi r24,0x30
+    out PORTD,r24
+    sbi PORTD,PD3
+    cbi PORTD,PD3     
+    ldi r24,39
+    ldi r25,0
+    rcall wait_usec
+    ldi r24,0x30
+    out PORTD,r24
+    sbi PORTD,PD3
+    cbi PORTD,PD3
+    ldi r24,39
+    ldi r25,0
+    rcall wait_usec
+    ldi r24,0x20
+    out PORTD,r24
+    sbi PORTD,PD3
+    cbi PORTD,PD3
+    ldi r24,39
+    ldi r25,0
+    rcall wait_usec
+    ldi r24,0x28
+    rcall lcd_command
+    ldi r24,0x0c   
+    rcall lcd_command
+    ldi r24,0x01
+    rcall lcd_command
+    ldi r24,low(1530)
+    ldi r25,high(1530)
+    rcall wait_usec
+    ldi r24,0x06
+    rcall lcd_command      
+    ret
+;-------------------------------
+
+
+;-------------------------------
+lcd_command:
+    cbi PORTD,PD2
+    rcall write_2_nibbles
+    ldi r24,39
+    ldi r25,0
+    rcall wait_usec
+    ret
+;-------------------------------
+
+
+;-------------------------------
+lcd_data:
+    sbi PORTD,PD2
+    rcall write_2_nibbles
+    ldi r24,43
+    ldi r25,0
+    rcall wait_usec
+    ret
+;-------------------------------
+
+
+;-------------------------------
+write_2_nibbles:
+    push r24
+    in r25,PIND
+    andi r25,0x0f
+    andi r24,0xf0
+    add r24,r25
+    out PORTD,r24
+    sbi PORTD,PD3
+    cbi PORTD,PD3
+    pop r24
+    swap r24
+    andi r24,0xf0
+    add r24,r25
+    out PORTD,r24
+    sbi PORTD,PD3
+    cbi PORTD,PD3
+    ret
+;-------------------------------
+
+
+
+
+
+
+
+
+
+
+******************************************************************
+
+ΕΚΦΩΝΗΣΕΙΣ ΘΕΜΑΤΩΝ 8086
+
+******************************************************************
+1)ΚΑΝΟΝΙΚΗ 2016 15/02 10:30
+i) Διάβασμα από την PORTD ενός αριθμού, να εντοπίζει το LSB που έχει τιμή 1 και να θέτει στο 1 όλα τα LEDS της PORTB που είναι ίσης ή μικρότερης τάξης από αυτό, πχ: PORTD: 01001100 => PORTB: 00000111 (2 MONAΔΕΣ)
+ii) Διάβασμα από το πληκτρολόγιο ενός αριθμού χ ε 0-8, να κάνει ακριβώς ό,τι και το (α) και επιπλέον να τυπώνει την τιμή 7*χ στην οθόνη LCD (2 MONAΔΕΣ)
+------------------------------------------------------------------
+2) ΕΠΑΝ.2014 4:50
+i)Να γραφεί σε assembly και στον προσομοιωτή (AVR Studio) του Μικροελεγκτή Mega16 AVR πρόγραμμα που να μετράει το πλήθος χ από ζευγάρια διαδοχικών bit με τους συνδυασμούς 01 ή 11 της θύρας εισόδου PORTA. Με βάση το πλήθος αυτό χ ε {0-7}, να θέτει (στο λογικό 1) αντίστοιχο αριθμό από bit αρχίζοντας από δεξιά (από το LSB), της θύρας (εξόδου) PORTB. Παράδειγμα: για PORTA=0110 0010 => χ=3 => PORTB = 0000 0111 και για PORTA = 0110 1101 => χ=5 => PORTB = 0001 1111. Η λειτουργία αυτή να είναι συνεχόμενη. (2 ΜΟΝΑΔΕΣ)
+ii)Να προγραμματίσετε σε assembly και να επιδείξετε στο εκπαιδευτικό σύστημα easyAVR6 τις εξής λειτουργίες: από το keypad 4x4 εισάγονται διαδοχικά δύο δεδομένα x,y ε {0,9}, τα άλλα (A-F) να αγνοούνται. Να υπολογίσετε και να εμφανίσετε στην οθόνη LCD, στην πάνω αριστερή θέση της οθόνης, το αποτέλεσμα της πρόσθεσής τους σε δεκαεξαδική μορφή (2 ψηφίων). Η λειτουργία να είναι συνεχόμενη. (2 ΜΟΝΑΔΕΣ)
+------------------------------------------------------------------
+3)ΚΑΝΟΝΙΚΗ 2015 08:30
+i) Να γραφτεί σε assembly και να δειχθεί στον προσομοιωτή (AVR Studio- Mega16) AVR πρόγραμμα που να δέχεται από PORTD, bits 0-3 τα Χ0-Χ3 και να απεικονίζει στο C , bits 0-1 τις λογικές συναρτήσεις Υ0 = Χ0 + Χ1+ Χ2 + Χ3 και Υ1 = Χ0Χ1Χ2Χ3. (2 ΜΟΝΑΔΕΣ)
+ii) Να γραφτεί σε assembly και να δειχθεί στο εκπαιδευτικό σύστημα easyAVR6 : από το keypad 4x4 εισάγονται διαδοχικά δύο δεδομένα x,y ε {0,D} (δεκαεξαδική μορφή). Υπολογίζει την ποσότητα z=x-y και εμφανίζει το αποτέλεσμα τους σε δεκαδική (ή hex δεν πολυθυμάμαι) μορφή στην lcd οθόνη με πρόσημο άμα είναι αρνητική. (2 ΜΟΝΑΔΕΣ)
+------------------------------------------------------------------
+4)ΚΑΝΟΝΙΚΗ 2015 10:30
+i)Διαβάζει 3 LSB της πόρτας εισόδου (ΡΟRTA) z=z2z1z0 {0-7} και αν z2=0 να θέτει στο 1 ίσο αριθμό από LSB της θύρας εισόδου PORTB. π.χ. για z=010 έχουμε PORTB=0000 0011.
+Αν z2=1, z1z0 ε {0-3} να θέτει στο 1 ίσο αριθμό από ΜSB της θύρας εξόδου PORTB. π.χ. για z=111 έχουμε PORTB=1110 0000 (2 μονάδες)
+ii)Από keypad 4x4 εισάγονται δύο δεκαδικοί χ,y ε {0,9} που πολλαπλασιάζονται. Το αποτέλεσμα να εμφανίζεται στην lcd οθόνη σε hex μορφή. Συνεχής λειτουργία. Μορφή 8*7=38 (2 μονάδες)
+------------------------------------------------------------------
+4)ΚΑΝΟΝΙΚΗ 2015 12:30
+i)Να γραφτεί σε assembly και να δειχθεί στον προσομοιωτή (AVR Studio- Mega16) AVR πρόγραμμα που να δέχεται από PORTC(είσοδος) 2 δεκαεξαδικούς αριθμούς (4 MSB ο πρώτος και 4 LSB ο δεύτερος), θα τους προσθέτει και θα εμφανίζει το άθροισμα τους στη PORTD(έξοδος) σε δεκαδική μορφή (4MSB δεκάδες,4LSB μονάδες). (2 ΜΟΝΑΔΕΣ)
+ii) Να γραφτεί σε assembly και να δειχθεί στο εκπαιδευτικό σύστημα easyAVR6 : από το keypad 4x4 εισάγονται διαδοχικά δύο δεδομένα x,y ε {0,D} (δεκαεξαδική μορφή). Υπολογίζει την ποσότητα z=x+y και εμφανίζει το αποτέλεσμα τους σε οκταδική μορφή στην lcd οθόνη στη μορφη : X+Y=Z. πχ: 9+C=25 . (2 ΜΟΝΑΔΕΣ)
+------------------------------------------------------------------
+5)ΕΠΑΝΑΛΗΠΤΙΚΗ 2014 09:30
+i) Να γραφεί σε assembly και στον προσομοιωτή (AVR Studio) του Μικροελεγκτή Mega16 AVR πρόγραμμα που να μετράει το πλήθος χ από ζευγάρια διαδοχικών bit με τους συνδυασμούς 01 ή 11 της θύρας εισόδου PORTA. Με βάση το πλήθος αυτό χ ε {0-7}, να θέτει (στο λογικό 1) αντίστοιχο αριθμό από bit αρχίζοντας από δεξιά (από το LSB), της θύρας (εξόδου) PORTB. Παράδειγμα: για PORTA=0110 0010 => χ=3 => PORTB = 0000 0111 και για PORTA = 0110 1101 => χ=5 => PORTB = 0001 1111. Η λειτουργία αυτή να είναι συνεχόμενη. (2 ΜΟΝΑΔΕΣ)
+ii) Να προγραμματίσετε σε assembly και να επιδείξετε στο εκπαιδευτικό σύστημα easyAVR6 τις εξής λειτουργίες: από το keypad 4x4 εισάγονται διαδοχικά δύο δεδομένα x,y ε {0,9}, τα άλλα (A-F) να αγνοούνται. Να υπολογίσετε και να εμφανίσετε στην οθόνη LCD, στην πάνω αριστερή θέση της οθόνης, το αποτέλεσμα της πρόσθεσής τους σε δεκαεξαδική μορφή (2 ψηφίων). Η λειτουργία να είναι συνεχόμενη. (2 ΜΟΝΑΔΕΣ)
+
+------------------------------------------------------------------
+6)ΚΑΝΟΝΙΚΗ 2014 08:30
+i) Να γραφτεί σε assembly και στον προσομοιωτή (AVR Studio) του Μικροελεκτή Mega16 AVR πρόγραμμα που να μετράει το πλήθός των δυαδικών μηδενικών των θυρών (εισόδου) PORTA και PORTB. Το αποτέλεσμα (0-16) να απεικονιστεί σε δεκαδική μορφή στη θύρα (εξόδου) PORT C. Στη δεκαδική μορφή εννοείται ότι τα 4 LSB της θύρας αντιστοιχούν στις μονάδες ενώ τα 4 MSB αντιστοιχούν στις δεκάδες. Υπενθυμίζεται ότι στον προσομοιωτή τα δεδομένα εισόδου/εξόδου είναι με θετική λογική. [2 ΜΟΝΑΔΕΣ]
+
+ii) Να προγραμματίσετε σε assembly και να επιδείξετε στο εκπαιδευτικό σύστημα easyAVR6 τις εξής λειτουργίες:από το keypad 4x4 εισάγονται διαδοχικά 2 δεδομένα x,y με τιμές {0-9}, τα άλλα να αγνοούνται. Να εμφανίσετε στην οθόνη LCD στην πάνω αριστερή θέση της οθόνης, τους 2 αριθμού και το αποτέλεσμα της πρόσθεσης σε δεκαδική μορφή. [2 ΜΟΝΑΔΕΣ]
+------------------------------------------------------------------
+7)ΚΑΝΟΝΙΚΗ 2014 17:10
+i)Να γραφεί σε assembly AVR και να εκτελεστεί στον προσομοιωτή (AVR Studio) του Μικροελεκτή Mega16 AVR πρόγραμμα που να εκτελεί τα εξής: Διαβάζει από την θύρα εισόδου PORTA έναν δυαδικό αριθμό 7bit Α6Α5Α4Α3Α2Α1Α0. Στη συνέχεια να υπολογίζει τον αριθμό Β=(Α6Α5Α4Α3Α2)*(2^Α1Α0) (ολίσθηση 0-3 φορές δηλαδή) και τον εμφανίζει στη θύρα εξόδου PORTB. Για παράδειγμα, αν Α=1010011, τότε στη θύρα Β θα πρέπει να φαίνεται ο αριθμός Β=10100000. Υπενθυμίζεται ότι στον προσομοιωτή τα δεδομένα εισόδου/εξόδου είναι με θετική λογική και ότι επειδή το πρόγραμμα θα είναι συνεχούς λειτουργίας, προκείμενου να παρατηρήσετε τις αλλαγές στην έξοδο ανάλογα με τις μεταβολές τις εισόδου, θα πρέπει να χρησιμοποιήσετε ένα breakpoint.
+
+ii)Να γραφτεί σε assembly AVR και να εκτελεστεί στο εκπαιδευτικό σύστημα easyAVR6 πρόγραμμα που να εκτελεί τα εξής: Ανάβει αρχικά τα 4 lsb led (0-3) της θύρας εξόδου PORTC. Στη συνέχεια κάθε φορά που προκαλείται διακοπή ΙΝΤ0 να σβήνει τα led της PORTC που ήταν αναμμένα και να ανάβει αυτά που ήταν σβηστά για 2 δευτερόλεπτα, ενώ μετά να επιστρέφει τα led στην αρχική τους κατάσταση. (Δόθηκε στη συνέχεια διευκρίνση ότι, αν συμβεί διακοπή μέσα στο διάστημα των 2 δευτερολέπτων, να μπλοκάρεται προσωρινά, να επιστρέφει η PORTC στην αρχική της κατάσταση και μετά να εκτελείται πάλι η ρουτίνα της διακοπής για τη 2η διακοπή. Εν ολίγοις να μην ανανεώνεται ο χρόνος των 2 sec χωρίς να έχει γίνει επιστροφή στην κατάσταση που έχουν τα led στο main πρόγραμμα)
+
+------------------------------------------------------------------
+8)ΚΑΝΟΝΙΚΗ 2013 10:45
+(i) (2 ΜΟΝΑΔΕΣ): Ζητείται πρόγραμμα σε assembly το οποίο θα επιδειχθεί
+στον προσομοιωτή του AVR Studio με την εξής λειτουργία: να διαβάζει από τη
+θύρα εισόδου (PORTB) τα 4 MSB και με βάση το υπόλοιπο y της διαίρεσης του
+αριθμού x {0-F} που προκύπτει από αυτά με το 9 (y = x mod 9) να θέτει το
+αντίστοιχο bit (1 έως 8) της θύρας εξόδου (PORTC), όπως φαίνεται στο παράδειγμα:
+10001101 -> x=8 -> y=8 -> 10000000, 11010100 -> x=D -> y=4 -> 00001000,
+00001001 -> x=0 -> y=0 -> 00000000. Ζητείται συνεχής λειτουργία.
+
+(ii) (2 ΜΟΝΑΔΕΣ): Ζητείται πρόγραμμα σε assembly το οποίο θα επιδειχθεί
+στο αναπτυξιακό σύστημα easyAVR6 με την εξής λειτουργία: θα δέχεται από το 4x4
+πληκτρολόγιο 2 αριθμούς x,y {0-D}, θα υπολογίζει το άθροισμά τους modulo 16
+((x+y) mod 16) και θα το προβάλλει σε δεκαεξαδική μορφή στην πάνω αριστερή
+θέση της οθόνης LCD. Η ένδειξη της οθόνης πρέπει να ανανεώνεται μόνο μετά την
+εισαγωγή - κάθε φορά - και των δύο νέων αριθμών από το πληκτρολόγιο. Ζητείται
+συνεχής λειτουργία.
+------------------------------------------------------------------
+9)ΚΑΝΟΝΙΚΗ 2013 13:00
+(i) Διαβάζονται από την PORTA τα bits Χ0,Χ1,Χ2 και υπολογίζονται οι ακόλουθες συναρτήσεις: Υ0 = Χ0 XOR X1 X0R X2, Y1 = X0X1 + X1X2 + X0X2. Κατόπιν το αποτέλεσμα να απεικονίζεται στην PORTB.
+(ii) Να διαβάζεται από το keypad ένας αριθμός (0-7) και να ανάβει το αντίστοιχης τάξης LED της PORTD. Δηλαδή αν πατηθεί το 1 να ανάψει το PD1, αν πατηθεί το 3 να ανάψει το PD3 κλπ. Στη συνέχεια, να κάνει παλινδρομική κίνηση ξεκινώντας από τη θέση που είναι και πηγαίνοντας προς τα MSB και μετά προς LSB, μέχρι να πατηθεί ένας άλλος αριθμός στο keypad.
+------------------------------------------------------------------
+10)ΚΑΝΟΝΙΚΗ 2013 15:15
+ii) Επίδειξη στην πλακέτα. Να διαβάζει από το πληκτρολόγιο έναν αριθμό χ = {0-D}. Αν 0 <= x < 6 να ανάβει τα 2 lsb της PORTC, αν 6 <= x < 10 να ανάβει τα 
+bits 4 & 5 και αν χ > 10 να ανάβει τα 2 msb.
+------------------------------------------------------------------
+11i)ΕΠΑΝΑΛΗΠΤΙΚΗ 2012 09:45
+Να γράψετε πρόγραμμα συνεχούς λειτουργίας που να δέχεται μία είσοδο από την PORTA
+και να ανάβει τα αριστερότερα leds την θύρας PORTC από το πρώτο 1 της PORTA.
+πχ είσοδος στην PORTA: 000 1 1010
+έξοδος στην PORTC: 11100000
+------------------------------------------------------------------
+12i)ΕΠΑΝΑΛΗΠΤΙΚΗ 2012 12:15
+Υλοποίηση λογικών συναρτήσεων. Είσοδος PORTB (X0-X7), έξοδος 2 LSB PORTA (Y0-Y1). Y0 = X3X2X1'X0' + X3'X2'X1X0, Y1 = X7'X6'X5X4 + X7X6X5'X4'. Συνεχής λειτουργία. (Τα leds είναι συνδεδεμένα με θετική λογική) (3 μονάδες)
+------------------------------------------------------------------
+13)ΚΑΝΟΝΙΚΗ 2012 08:30
+i)Να γραφεί και να επιδειχθεί στο AVR Studio (δε χρειαζόταν πλακέτα, επιτρεπόταν όμως) πρόγραμμα που δέχεται εισόδους x από το PortA και εμφανίζει ως εξόδους y στο PortB τα αποτελέσματα των παρακάτω συναρτήσεων (2 AND (*) , 2 OR (+)): (2 μονάδες)
+y_0 = x_0 * x_1
+y_1 = x_2 * x_3
+y_2 = x_4 + x_5
+y_3 = x_6 + x_7
+xwris lush auto : ii) Να γραφεί και να επιδειχθεί στην ATmega16 (πλακέτα) πρόγραμμα που διαβάζει 2 αριθμούς {0-7} από το πληκτρολόγιο, αγνοώντας κάθε μεγαλύτερη είσοδο και τυπώνει στην 1η θέση του LCD Display το άθροισμά τους. (2 μονάδες)
+------------------------------------------------------------------
+14i)ΕΠΑΝΑΛΗΠΤΙΚΗ 2011 14:30
+Να γραφεί σε assembly και στον προσομοιωτή (AVR Studio) του μικροελεγκτή Mega16 AVR πρόγραμμα που να εξομοιώνει συνεχώς τη λειτουργία των παρακάτω λογικών σχέσεων που οι είσοδοί τους (X_0 - X_7) δίνονται από τη θύρα (εισόδου) PORTB. Οι έξοδοι (Y_0 - Y_7) να απεικονιστούν στη θύρα (εξόδου) PORTA ως εξής: Y_i=X_i \cdot Y_i-1, για i=0 έως 7 και Y_{-1}=1. Υπενθυμίζεται ότι στον προσομοιωτή τα δεδομένα εισόδου/εξόδου είναι με θετική λογική. (2 ΜΟΝΑΔΕΣ)
+------------------------------------------------------------------
+15i)ΚΑΝΟΝΙΚΗ 2011 08:30
+Διαβάζονται από τις PORTA, PORTB δυο αριθμοί και μετράμε τα μηδενικά τους (πχ, το 11100010 έχει 4 μηδενικά). Το άθροισμα των μηδενικών το αναπαριστούμε σε BCD μορφή στην PORTC (δηλαδή, αν βρεθούν 12 μηδενικά, στην PORTC πρέπει να βρίσκεται η τιμή 0χ12 και όχι 0χ0C).[2]
+
+------------------------------------------------------------------
+16i)ΚΑΝΟΝΙΚΗ 2011 10:45
+Να γραφεί σε assembly και στον προσομοιωτή (AVR Studio) του μικροελεγκτή Mega16 πρόγραμμα που να διαβάζει τη θύρα (εισόδου)PORTA και με βάση το 1ο αριστερότερο ΟΝ,να θέτε το αντίστοιχης τάξης bit της θύρας (εξόδου) PORTD και όλα τα υψηλότερης τάξης bit μετά από αυτό (π.χ. για 0011 0100 => XXX0 0000). Το πρόγραμμα να είναι συνεχούς λειτουργίας.
+------------------------------------------------------------------
+17i)ΚΑΝΟΝΙΚΗ 2011 15:15
+Υλοποίηση μετρητή 8-bit στην PORTD. Η λειτουργία ελέγχεται από τα 2 MSB της PORTA. Με το 8o bit στη τιμή 1 φορτώνεται η αρχική τιμή του μετρητή.
+Με την εναλλαγή του 7ου bit από 0 σε 1 αυξάνεται ο μετρητής. (το 8ο bit πρέπει να είναι 0).
+------------------------------------------------------------------
+
+
+******************************************************************
+
+ΛΥΣΕΙΣ ΘΕΜΑΤΩΝ AVR
+
+******************************************************************
+
+------------------------------------------------------------------
+1i)
+;
+; AssemblerApplication1.asm
+;
+; Created: 13/9/2016 8:17:19 µµ
+; Author : Vasileios
+;
+
+
+; Replace with your application code
+.INCLUDE "m16def.inc"
+.def reg=r16
+.def reg2=r17
+.def reg3=r18
+.def reg4=r19
+
+main:
+	ldi reg,LOW(RAMEND)  ;ARXIKOPOIHSH STOIVAS
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg	
+	out DDRD,reg	;portD input
+			;IF DDRx IS SET TO 0 => X IS INPUT PORT, IF SET TO 1 => X IS OUTPUT PORT
+	ser reg
+	
+	out DDRB,reg	;portB output
+	clr reg
+	out PORTB,reg 
+
+start:
+	in reg,PIND	;READ PINS FROM PORTD
+	mov reg2,reg	
+	cpi reg2,0
+	breq zero_input
+	
+	non_zero_input:		;o reg 8a paei gia eksodo
+		ldi reg,1	;1st lsb gia output
+		mov reg3,reg2	;take copy of input
+		ror reg3	;rotate right over carry	
+		brcs light_leds	;lsb is 1
+	
+		ldi reg,3	;2 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+		ldi reg,7	;3 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+		ldi reg,15	;4 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+		ldi reg,31	;5 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+		ldi reg,63	;6 lsbs gia output
+		ror reg3
+		brcs light_leds
+		
+		ldi reg,127	;7 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+		ldi reg,255	;8 lsbs gia output
+		ror reg3
+		brcs light_leds
+
+	zero_input:
+		ldi reg,0
+	
+	;;;;vale prama edw
+
+	light_leds:
+
+		out PORTB,reg
+
+rjmp start
+------------------------------------------------------------------
+2i)
+.INCLUDE "m16def.inc"
+.def reg=r16
+.def reg2=r17
+.def reg3=r18
+.def reg4=r19
+
+main:
+	ldi reg,LOW(RAMEND)  ;a?????p???s? st??ßa?
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	;portA input, portB output
+	out DDRB,reg
+
+start:
+	in reg,PINA
+	mov reg2,reg
+	ldi reg3,0
+	ldi reg4,7
+lopa:
+	andi reg, 0x03
+	cpi reg, 0x03
+	breq ayksise
+	cpi reg, 0x01
+	breq ayksise
+	rjmp cont
+
+ayksise:
+	inc reg3
+cont:
+	ror reg2
+	mov reg,reg2
+	dec reg4
+	brne lopa
+
+	cpi reg3,0
+	breq miden
+	
+	ldi reg,0x00
+fixoutput:
+	sec
+	rol reg
+	dec reg3
+	brne fixoutput
+show:
+	out PORTB,reg
+	rjmp start
+
+miden:
+	ldi reg,0x00
+rjmp show
+		
+------------------------------------------------------------------
+2ii)
+.DSEG
+_tmp_:.byte 2 ;dilwsi metavlitis tmp aparaititis gia to keypad rising
+;edge
+;----telos data segment
+
+.CSEG
+
+.include "m16def.inc"
+.def reg=r16
+.def reg2=r17
+.def reg3=r18
+.def reg4=r19
+
+main:
+	ldi reg,LOW(RAMEND)  ;a?????p???s? st??ίa?
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	ldi r26, LOW(_tmp_)
+	ldi r27, HIGH(_tmp_) ;fortwse se XH kai XL ti diey8insi tou tmp
+	clr reg
+	st X, reg ;arxikopoihse tmp diladi store 0 sti diey8insi
+	st -X, reg
+	out DDRA,reg
+	ser reg
+	out PORTA,reg ;portA input, portB output
+	out DDRB,reg
+
+	ldi reg, (1 << PC7) | (1 << PC6) | (1 << PC5) | (1 << PC4) ; eksodoi ta
+	;4 MSB eisodoi ta 4 LSB tou PORTC
+	out DDRC, reg
+	ser reg
+	out DDRD, reg ;port d eksodos gia tin o8oni
+	clr reg
+	out PORTD, reg
+	rcall lcd_init  
+readfirst:
+	ldi r24, 15
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	tst r24
+	breq readfirst
+	cpi r24, '0'
+	brlo readfirst
+	cpi r24, ':'
+	brsh readfirst
+	push r24
+readsec:
+	ldi r24, 15
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	tst r24
+	breq readsec
+	cpi r24, '0'
+	brlo readsec
+	cpi r24, ':'
+	brsh readsec
+	subi r24, '0'
+	pop reg
+	subi reg, '0'
+	add reg, r24
+	cpi reg, 16
+	brsh toobig
+	cpi reg, 10
+	brsh big
+	ldi r24, '0'
+	rcall lcd_data
+	ldi r24, '0'
+	add r24, reg
+	rcall lcd_data
+	rjmp clear
+toobig:
+	ldi r24, '1'
+	rcall lcd_data
+	mov r24, reg
+	ldi reg, 16
+	subi r24, 16
+	ldi r25, '0'
+	add r24, r25
+	rcall lcd_data
+	rjmp clear
+big:
+	ldi r24, '0'
+	rcall lcd_data
+	mov r24, reg
+	ldi reg, 10
+	sub r24, reg
+	ldi r25, 'A'
+	add r24, r25
+	rcall lcd_data
+clear:
+	ldi r24, 0xff
+	ldi r25, 0
+	rcall wait_msec
+	ldi r24, 1
+	rcall lcd_command
+	ldi r24, high(1530)
+	ldi r25, low(1530)
+	rcall wait_usec
+	rjmp readfirst
+	
+
+
+write_2_nibbles:
+push r24 ; stelnei ta 4 MSB
+in r25 ,PIND ; diavazontai ta 4 LSB kai ta ksanastelnoume
+andi r25 ,0x0f ; gia na min xalasoume tin opoia proigoumeni katastasi
+andi r24 ,0xf0 ; apomonwntai ta 4 MSB kai
+add r24 ,r25 ; sindiazontai me ta proiparxonta 4 LSB
+out PORTD ,r24 ; kai dinontai stin eksodo
+sbi PORTD ,PD3 ;dimiourgeitai palmos Enable ston akrodekti PD3
+cbi PORTD ,PD3 ; PD3=1 kai meta PD3=0
+pop r24 ; stelnei ta 4 LSB. Anaktatai to byte.
+swap r24 ; enallasontai ta 4 MSB kai ta 4 LSB
+andi r24 ,0xf0 ; pou me tin seira tous apostellonta
+add r24 ,r25
+out PORTD ,r24
+sbi PORTD ,PD3 ; Neos palmos Enable
+cbi PORTD ,PD3
+ret
+lcd_data:
+sbi PORTD ,PD2 ; epilogi tou kataxwriti dedomenwn (PD2=1)
+rcall write_2_nibbles ; apostolh tou byte
+ldi r24 ,43 ; anamoni 43usec mexri na oloklirw8ei i lipsi
+ldi r25 ,0 ; twn dedomenwn apo ton elegkti tis lcd
+rcall wait_usec
+ret
+lcd_command:
+cbi PORTD ,PD2 ; epilogi tou kataxwriti entolwn (PD2=1)
+rcall write_2_nibbles ; apostoli tis entolis kai anamoni 39usec
+ldi r24 ,39 ; gia tin oloklirwsi tis ektelesis apo ton elegkti tis lcd.
+ldi r25 ,0 ; SHM.: uparxoun dio entoles, oi clear display kai return
+;home,
+rcall wait_usec ; pou apaitoun simantika megalitero xroniko diastima.
+ret
+lcd_init:
+ldi r24 ,40 ; Otan o elegktis tis lcd trofodoteitai me
+ldi r25 ,0 ; reyma ektelei ti diki tou arxikopoihsh
+rcall wait_msec ; Anamoni 40 msec mexri ayti na oloklirw8ei.
+ldi r24 ,0x30 ; entoli metavasis se 8 bit mode
+out PORTD ,r24 ; epeidi de mporoume na eimaste vevaioi
+sbi PORTD ,PD3 ; gia ti diamorfwsi eisodou tou elegkti
+cbi PORTD ,PD3 ; tis o8onis, i entoli apostelletai dio fores
+ldi r24 ,39
+ldi r25 ,0 ; ean o elegktis tis o8onis vrisketai se 8-bit mode
+rcall wait_usec ; den 8a simvei tipota, alla an o elegktis exei
+;diamorwsi 8 bit
+; eisodou 4 bit 8a metavei se diamorfwsi 8
+;bit
+ldi r24 ,0x30
+out PORTD ,r24
+sbi PORTD ,PD3
+cbi PORTD ,PD3
+ldi r24 ,39
+ldi r25 ,0
+rcall wait_usec
+ldi r24 ,0x20 ; allagi se 4-bit mode
+out PORTD ,r24
+sbi PORTD ,PD3
+cbi PORTD ,PD3
+ldi r24 ,39
+ldi r25 ,0
+rcall wait_usec
+ldi r24 ,0x28 ; epilogi xaraktirwn mege8ous 5x8 koukidwn
+rcall lcd_command ; kai emfanisi dio grammwn stin o8oni
+ldi r24 ,0x0c ; energopoihsh tis o8onis, apokripsi tou kersora
+rcall lcd_command
+ldi r24 ,0x01 ; ka8arismos tis o8onis
+rcall lcd_command
+ldi r24 ,low(1530)
+ldi r25 ,high(1530)
+rcall wait_usec
+ldi r24 ,0x06 ; energopoihsh aytomatis ayksisis kata 1 tis diey8insis
+rcall lcd_command ; pou einai apo8ikeymeni ston metriti diey8insewn
+; apenergopoihsh tis olis8isis olokliris
+;tis o8onis
+ret
+wait_usec:
+sbiw r24,1
+nop
+nop
+nop
+nop
+brne wait_usec
+ret
+wait_msec:
+push r24
+push r25
+ldi r24, low(998)
+ldi r25, high(998)
+rcall wait_usec
+pop r25
+pop r24
+sbiw r24, 1
+brne wait_msec
+ret
+scan_row:
+ldi r25, 0x08 ; a?????p???s? µe ‘0000 1000’
+back_:
+lsl r25 ; a??ste?? ???s??s? t?? ‘1’ t?se? ??se??
+dec r24 ; ?s?? e??a? ? a???µ?? t?? ??aµµ??
+brne back_
+out PORTC, r25 ; ? a?t?st???? ??aµµ? t??eta? st? ?????? ‘1’
+nop
+nop ; ?a??st???s? ??a ?a p????ίe? ?a ???e? ? a??a?? ?at?stas??
+in r24, PINC ; ep?st??f??? ?? ??se?? (st??e?) t?? d?a??pt?? p?? e??a?
+;p?esµ????
+andi r24, 0x0f ; ap?µ??????ta? ta 4LSB ?p?? ta ‘1’ de?????? p?? e??a?
+;pat?µ????
+ret ; ?? d?a??pte?.
+scan_keypad:
+ldi r24, 0x01 ; ??e??e t?? p??t? ??aµµ? t?? p???t????????
+rcall scan_row
+swap r24 ; ap????e?se t? ap?t??esµa
+mov r27, r24 ;sta 4 msb t?? r27
+ldi r24, 0x02 ; ??e??e t? de?te?? ??aµµ? t?? p???t????????
+rcall scan_row
+add r27, r24 ; ap????e?se t? ap?t??esµa sta 4 lsb t?? r27
+ldi r24, 0x03 ; ??e??e t?? t??t? ??aµµ? t?? p???t????????
+rcall scan_row
+swap r24 ; ap????e?se t? ap?t??esµa
+mov r26, r24 ; sta 4 msb t?? r26
+ldi r24, 0x04 ; ??e??e t?? t?ta?t? ??aµµ? t?? p???t????????
+rcall scan_row
+add r26, r24 ; ap????e?se t? ap?t??esµa sta 4 lsb t?? r26
+movw r24, r26 ; µet?fe?e t? ap?t??esµa st??? ?ata????t?? r25:r24
+ret
+scan_keypad_rising_edge:
+mov r22, r24 ; ap????e?se t? ????? sp??????sµ?? st?? r22
+rcall scan_keypad ; ??e??e t? p???t??????? ??a p?esµ????? d?a??pte?
+push r24 ; ?a? ap????e?se t? ap?t??esµa
+push r25
+mov r24, r22 ; ?a??st???se r22 ms (t?p???? t?µ?? 10 - 20 msec p??
+;?a?????eta? ap? t??
+ldi r25, 0 ; ?atas?e?ast? t?? p???t???????? – ?????d????e?a
+;sp??????sµ??)
+rcall wait_msec
+rcall scan_keypad ; ??e??e t? p???t??????? ?a?? ?a?
+pop r23 ; ap?????e ?sa p???t?a eµfa??????
+pop r22 ;sp??????sµ?
+and r24, r22
+and r25, r23
+ldi r26, low(_tmp_) ; f??t?se t?? ?at?stas? t?? d?a??pt?? st??
+ldi r27, high(_tmp_) ; p??????µe?? ???s? t?? ???t??a? st??? r27:r26
+ld r23, X+
+ld r22, X
+st X, r24 ; ap????e?se st? RAM t? ??a ?at?stas?
+st -X, r25 ; t?? d?a??pt??
+com r23
+com r22 ; ί?e? t??? d?a??pte? p?? ????? «µ????» pat??e?
+and r24 ,r22
+and r25 ,r23
+ret
+keypad_to_ascii: ; ?????? ‘1’ st?? ??se?? t?? ?ata????t? r26 d???????
+movw r26, r24 ; ta pa?a??t? s?µί??a ?a? a???µ???
+ldi r24, '*'
+sbrc r26, 0
+ret
+ldi r24, '0'
+sbrc r26, 1
+ret
+ldi r24, '#'
+sbrc r26, 2
+ret
+ldi r24, 'D'
+sbrc r26, 3 ; a? de? e??a? ‘1’pa?a??µpte? t?? ret, a????? (a? e??a?‘1’)
+ret ; ep?st??fe? µe t?? ?ata????t? r24 t?? ASCII t?µ? t?? D.
+ldi r24, '7'
+sbrc r26, 4
+ret
+ldi r24, '8'
+sbrc r26, 5
+ret
+ldi r24, '9'
+sbrc r26, 6
+ret
+ldi r24, 'C'
+sbrc r26, 7
+ret
+ldi r24, '4' ; ?????? ‘1’ st?? ??se?? t?? ?ata????t? r27 d???????
+sbrc r27, 0 ; ta pa?a??t? s?µί??a ?a? a???µ???
+ret
+ldi r24, '5'
+sbrc r27, 1
+ret
+ldi r24, '6'
+sbrc r27, 2
+ret
+ldi r24, 'B'
+sbrc r27, 3
+ret
+ldi r24, '1'
+sbrc r27, 4
+ret
+ldi r24, '2'
+sbrc r27, 5
+ret
+ldi r24, '3'
+sbrc r27, 6
+ret
+ldi r24, 'A'
+sbrc r27, 7
+ret
+clr r24
+ret
+------------------------------------------------------------------
+3i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def x0 =r18
+.def x1 =r19
+.def x2 = r20
+.def x3 = r21
+.def result =r22
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRD,reg
+	ser reg
+	out DDRC,reg
+
+start:
+	in reg,PIND
+	andi reg,0b00001111
+	mov temp,reg
+	andi temp,(1<<PA0)
+	mov x0,temp
+	mov temp,reg
+	andi temp,(1<<PA1)
+	lsr temp
+	mov x1,temp
+	mov temp,reg
+	andi temp,(1<<PA2)
+	lsr temp
+	lsr temp
+	mov x2,temp
+	mov temp,reg
+	andi temp,(1<<PA3)
+	lsr temp
+	lsr temp
+	lsr temp
+	mov x3,temp
+y0:
+	ldi result,0
+	or result,x0
+	or result,x1
+	or result,x2
+	or result,x3
+y1: 
+	and x0,x1
+	and x0,x2
+	and x0,x3
+	lsl x0
+	or result,x0
+	out PORTC,result
+	rjmp start
+
+------------------------------------------------------------------
+3ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	rcall lcd_data
+	ldi r24,'-'
+	rcall lcd_data
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit
+	subi r24,55
+	rjmp next
+digit:
+	subi r24,48
+next:
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	mov temp,r24
+	rcall lcd_data
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit1l
+	subi r24,55
+	rjmp next1
+digit1l:
+	subi r24,48
+next1:
+	mov digit2,r24
+	ldi r24,'='
+	rcall lcd_data
+	sub digit1,digit2
+	brpl number
+	ldi r24,'-'
+	rcall lcd_data
+	neg digit1
+
+number:
+	clr temp
+	clr temp1
+	ldi temp,10
+dek:
+	cp digit1,temp
+	brlo mon
+	inc temp1
+	subi digit1,10
+	rjmp dek
+mon:
+	mov digit2,digit1
+	subi digit2,-48
+	mov digit1,temp1
+	subi digit1,-48
+	mov r24,digit1
+	rcall lcd_data
+	mov r24,digit2
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+------------------------------------------------------------------
+4i1-DIKO MOU)
+
+; AssemblerApplication1.asm
+;
+; Created: 13/9/2016 8:17:19 µµ
+; Author : Vasileios
+;
+
+
+; Replace with your application code
+.INCLUDE "m16def.inc"
+.def temp=r16
+.def input=r17
+.def output=r18
+.def temp2=r19
+
+main:
+	ldi temp,LOW(RAMEND)  ;ARXIKOPOIHSH STOIVAS
+	out SPL,temp
+	ldi temp,HIGH(RAMEND)
+	out SPH,temp
+	clr temp
+	out DDRA,temp	;portA input
+			;IF DDRx IS SET TO 0 => X IS INPUT PORT, IF SET TO 1 => X IS OUTPUT PORT
+	ser temp
+	
+	out DDRB,temp	;portB output
+	clr temp
+	out PORTB,temp 
+
+start:
+	ldi output,0
+	in input,PINA	;READ PINS FROM PORTA
+	andi input,7	;3 LSBs isolation
+	
+	mov temp,input
+	andi temp,4		;isolate the (0000 0X00) X bit
+	cpi temp,0
+	breq THESE_SE_LSB
+
+	THESE_SE_MSB: 
+		mov temp,input
+		andi temp,3	;isolate the (0000 00XX) 2 lsb bits
+		cpi temp,0
+		breq light_leds
+
+		ldi output,0x80 ; 1000 0000
+		cpi temp,1
+		breq light_leds
+		
+		ldi output,0xC0	;1100 0000
+		cpi temp,2
+		breq light_leds
+
+		ldi output,0xE0	;1110 0000
+		jmp light_leds
+
+	THESE_SE_LSB:
+		mov temp,input
+		andi temp,3
+		cpi temp,0
+		breq light_leds
+
+		ldi output,0x01	;0000 0001
+		cpi temp,1
+		breq light_leds
+
+		ldi output,03	;0000 0011
+		cpi temp,2
+		breq light_leds
+
+		ldi output,07	;0000 0111
+	light_leds:
+
+		out PORTB,output
+
+rjmp start
+
+-------------------------------------------------------------
+4i2)ETOIMO, OXI DIKO MOY
+
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def x0 =r18
+.def x1 =r19
+.def x2 = r20
+.def x3 = r21
+.def result =r22
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRB,reg
+
+start:
+	ldi result,0
+	in reg,PINA
+	andi reg,0b00000111
+	mov temp,reg
+	andi temp,0b00000100
+	andi reg,0b00000011
+	cpi temp,0
+	breq LSB
+	jmp MSB
+
+LSB:
+	ldi temp,1
+	cpi reg,0
+	breq output
+again:
+	or result,temp
+	lsl temp
+	dec reg
+	brne again
+	jmp output
+
+MSB:
+	ldi temp,0x80
+	cpi reg,0
+	breq output
+again1:
+	or result,temp
+	lsr temp
+	dec reg
+	brne again1
+
+output:
+	out PORTC,result
+	
+	rjmp start
+------------------------------------------------------------------
+4ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0	;fantazomai elegxos an exei path8ei kati, opote 8a perimenei wspoy na path8ei
+	breq read
+	cpi r24,48	;48 is the ascii of 0 (zero)
+	brlo read	;if lower then input again
+	cpi r24,58	;57 is the ascii of 9 (nine)
+	brge read	;if greater then input again
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	rcall lcd_data
+	ldi r24,'*'
+	rcall lcd_data
+	mov r24,temp
+	subi r24,48
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	cpi r24,48
+	brlo second_read
+	cpi r24,58
+	brge second_read
+	mov temp,r24
+	rcall lcd_data
+	mov r24,temp
+	subi r24,48
+next1:
+	mov digit2,r24
+	ldi r24,'='
+	rcall lcd_data
+	mul digit1,digit2	;MUL Rd,Rr ---operation: R1:R0 ← Rd x Rr
+	mov digit1,r0		;xwraei to apotelesma ston digit1 (8bit ->max 256) afou to megisto ginomeno poy mporoyme na xoume einai 9x9=81
+
+	clr temp
+	clr temp1
+	ldi temp,16
+dek:
+	cp digit1,temp
+	brlo mon
+	inc temp1
+	subi digit1,16
+	rjmp dek
+mon:
+	mov digit2,digit1
+	cpi digit2,10
+	brge letter
+	subi digit2,-48
+	jmp next_dig
+letter:
+	subi digit2,-55
+next_dig:
+	mov digit1,temp1
+	cpi digit1,10
+	brge letter1
+	subi digit1,-48
+	jmp next_dig1
+letter1:
+	subi digit1,-55
+next_dig1:
+	mov r24,digit1
+	rcall lcd_data
+	mov r24,digit2
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+------------------------------------------------------------------
+4i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def digits =r18
+.def counter= r19
+.def result =r21
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRC,reg
+	ser reg
+	out DDRD,reg
+
+start:
+	in reg,PINC
+	mov temp,reg
+	andi reg,0b00001111
+	andi temp,0b11110000
+	lsr temp
+	lsr temp
+	lsr temp
+	lsr temp
+	add reg,temp
+
+	clr temp
+dek:
+	cpi reg,10
+	brlo mon
+	inc temp
+	subi reg,10
+	rjmp dek
+mon:
+	lsl temp
+	lsl temp
+	lsl temp
+	lsl temp
+	or reg,temp
+
+	out PORTD,reg
+
+	
+
+
+	
+	
+	rjmp start
+------------------------------------------------------------------
+4ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	rcall lcd_data
+	ldi r24,'+'
+	rcall lcd_data
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit
+	subi r24,55
+	rjmp next
+digit:
+	subi r24,48
+next:
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	mov temp,r24
+	rcall lcd_data
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit1l
+	subi r24,55
+	rjmp next1
+digit1l:
+	subi r24,48
+next1:
+	mov digit2,r24
+	ldi r24,'='
+	rcall lcd_data
+	add digit1,digit2
+
+	clr temp
+	clr temp1
+	ldi temp,8
+dek:
+	cp digit1,temp
+	brlo mon
+	inc temp1
+	subi digit1,8
+	rjmp dek
+mon:
+	mov digit2,digit1
+	subi digit2,-48
+	mov digit1,temp1
+	subi digit1,-48
+	mov r24,digit1
+	rcall lcd_data
+	mov r24,digit2
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+------------------------------------------------------------------
+5i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def digits =r18
+.def counter= r19
+.def result =r21
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRB,reg
+
+start:
+	ldi digits,7
+	in reg,PINA
+next:
+	mov temp,reg
+	andi temp,0x03
+	cpi temp,0b00000001
+	brne one_one
+	inc counter
+	jmp no_add
+one_one:
+	cpi temp,0b00000011
+	brne no_add
+	inc counter
+no_add:
+	lsr reg
+	dec digits
+	brne next
+
+	ldi result,0
+	ldi temp,1
+	cpi counter,0
+	breq output
+again:
+	or result,temp
+	lsl temp
+	dec counter
+	brne again
+output:
+	out PORTB,result
+
+
+	
+	
+	rjmp start
+
+------------------------------------------------------------------
+5ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	cpi r24,48
+	brlo read
+	cpi r24,58
+	brge read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	subi r24,48
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	cpi r24,48
+	brlo second_read
+	cpi r24,58
+	brge second_read
+	mov temp,r24
+	subi r24,48
+next1:
+	mov digit2,r24
+	
+	add digit1,digit2
+
+	clr temp
+	clr temp1
+	ldi temp,16
+dek:
+	cp digit1,temp
+	brlo mon
+	inc temp1
+	subi digit1,16
+	rjmp dek
+mon:
+	mov digit2,digit1
+	cpi digit2,10
+	brge letter
+	subi digit2,-48
+	jmp next_dig
+letter:
+	subi digit2,-55
+next_dig:
+	mov digit1,temp1
+	cpi digit1,10
+	brge letter1
+	subi digit1,-48
+	jmp next_dig1
+letter1:
+	subi digit1,-55
+next_dig1:
+	mov r24,digit1
+	rcall lcd_data
+	mov r24,digit2
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+
+------------------------------------------------------------------
+6i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def compare= r18
+.def counter = r19
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRB,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRC,reg
+
+start:
+	ldi counter,0x00
+	ldi compare,0x01
+	in reg,PINA
+next1:
+	mov temp,reg
+	and temp,compare
+	cpi temp,0x00
+	brne no_zero1
+	inc counter
+no_zero1:
+	lsl compare
+	cpi compare,0x00
+	brne next1
+
+	ldi compare,0x01
+	in reg,PINB
+next2:
+	mov temp,reg
+	and temp,compare
+	cpi temp,0x00
+	brne no_zero2
+	inc counter
+no_zero2:
+	lsl compare
+	cpi compare,0x00
+	brne next2
+
+	clr reg
+	clr compare
+	ldi temp,10
+dek:
+	cp counter,temp
+	brlo mon
+	inc reg
+	subi counter,10
+	rjmp dek
+mon:
+	mov compare,counter
+	
+	lsl reg
+	lsl reg
+	lsl reg
+	lsl reg
+	or reg,compare
+	out PORTC,reg
+
+
+	rjmp start
+	
+------------------------------------------------------------------
+6ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	cpi r24,48
+	brlo read
+	cpi r24,58
+	brge read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	rcall lcd_data
+	ldi r24,'+'
+	rcall lcd_data
+	mov r24,temp
+	subi r24,48
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	cpi r24,48
+	brlo second_read
+	cpi r24,58
+	brge second_read
+	mov temp,r24
+	rcall lcd_data
+	mov r24,temp
+	subi r24,48
+next1:
+	mov digit2,r24
+
+	ldi r24,'='
+	rcall lcd_data
+	
+	add digit1,digit2
+
+	clr temp
+	clr temp1
+	ldi temp,10
+dek:
+	cp digit1,temp
+	brlo mon
+	inc temp1
+	subi digit1,10
+	rjmp dek
+mon:
+	mov digit2,digit1
+	cpi digit2,10
+	brge letter
+	subi digit2,-48
+	jmp next_dig
+letter:
+	subi digit2,-55
+next_dig:
+	mov digit1,temp1
+	cpi digit1,10
+	brge letter1
+	subi digit1,-48
+	jmp next_dig1
+letter1:
+	subi digit1,-55
+next_dig1:
+	mov r24,digit1
+	rcall lcd_data
+	mov r24,digit2
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+
+
+------------------------------------------------------------------
+7i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def digits =r18
+.def x1 =r19
+.def x2 = r20
+.def result =r21
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRB,reg
+
+start:
+	in reg,PINA
+	andi reg,0b01111111
+	mov temp,reg
+	andi temp,0b00000011
+	andi reg,0b01111100
+	lsr reg 
+	lsr reg
+	cpi temp,0
+	breq output
+again:
+	lsl reg
+	dec temp
+	brne again
+output:
+	out PORTB,reg
+	
+	rjmp start
+
+------------------------------------------------------------------
+7ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+.include "m16def.inc"
+.org 0x00
+ rjmp reset
+.org 0x04
+ rjmp ISR0
+.def temp = r16
+.def delay1 = r17
+.def delay2 = r18
+.def reg =r19
+
+reset:
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,(1<<ISC11)|(1<<ISC10)
+out MCUCR,temp
+ldi temp,(1<<INT1)
+out GICR,temp
+sei
+	ser temp
+	out DDRC,temp
+	clr temp
+	out DDRD,temp
+
+main:
+	ldi reg,0x0f
+	out PORTC,reg
+	rjmp main
+
+
+
+ISR0:
+	cli
+	push temp
+    in temp,SREG
+	push temp                ; always save SREG
+waiting:						;Wait for the sparkle effect.
+	clr temp
+	ldi temp,(1<<INTF1)      ;  ldi temp,(1<<INTF0) for INT0 
+	out GIFR,temp
+	ldi r24,low(5)
+	ldi r25,high(5)
+	rcall wait_msec
+	in temp,GIFR
+	sbrc temp,7              ;  sbrc temp,6 for INT0
+	rjmp waiting 
+
+	ldi reg,0xf0
+	out PORTC,reg
+	ldi r24,low(2000)
+	ldi r25,high(2000)
+	rcall wait_msec
+	pop temp
+	out SREG,temp
+	pop temp
+	sei
+	reti
+
+
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+
+------------------------------------------------------------------
+8i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def checker =r18
+.def result =r19
+.def previous = r20
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRB,reg
+	ser reg
+	out DDRC,reg
+
+start:
+	ldi checker,0
+	in reg,PINB
+	andi reg,0xf0
+	lsr reg
+	lsr reg
+	lsr reg
+	lsr reg
+	cpi reg,9
+	brlo lower
+	subi reg,9
+lower:
+	cpi reg,0
+	breq output
+	sec
+again:
+	rol checker
+	dec reg
+	brne again
+
+output:
+	out PORTC,checker
+	rjmp start
+------------------------------------------------------------------
+8ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	cpi r24,48
+	brlo read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit
+	subi r24,55
+	rjmp next
+digit:
+	subi r24,48
+next:
+	mov digit1,r24
+second_read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq second_read
+	cpi r24,48
+	brlo second_read
+	cpi r24,'A'
+	brlo digit1l
+	subi r24,55
+	rjmp next1
+digit1l:
+	subi r24,48
+next1:
+	mov digit2,r24
+
+	add digit1,digit2
+	andi digit1,0x0f
+	cpi digit1,10
+	brge letter1
+	subi digit1,-48
+	jmp next_dig1
+letter1:
+	subi digit1,-55
+next_dig1:
+	mov r24,digit1
+	rcall lcd_data
+	
+
+
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+------------------------------------------------------------------
+9i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def x0 =r18
+.def x1 =r19
+.def x2 = r20
+.def result =r21
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRB,reg
+
+start:
+	in reg,PINA
+	andi reg,0b00000111
+	mov temp,reg
+	andi temp,(1<<PA0)
+	mov x0,temp
+	mov temp,reg
+	andi temp,(1<<PA1)
+	lsr temp
+	mov x1,temp
+	mov temp,reg
+	andi temp,(1<<PA2)
+	lsr temp
+	lsr temp
+	mov x2,temp
+y0:
+	ldi result,0
+	or result,x0
+	eor result,x1
+	eor result,x2
+y1: 
+	mov temp,reg
+	andi temp,0b00000110
+	cpi temp,0
+	breq NO
+	mov temp,reg
+	andi temp,0b00000011
+	cpi temp,0
+	breq NO
+	mov temp,reg
+	andi temp,0b00000101
+	cpi temp,0
+	breq NO
+	ori result,(1<<PA1)
+NO:
+	out PORTC,result
+	rjmp start
+------------------------------------------------------------------
+9ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 = r19
+.def result = r20
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+ser temp
+out DDRA,temp
+rcall lcd_init    ; initialize screen
+ldi result,0
+
+read:
+	ldi r24 ,low(100) 
+	ldi r25 ,high(100) 
+	rcall wait_msec
+	rol result
+	out PORTA,result
+	brcc skip
+	rcall over
+skip:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	cpi r24,48
+	brlo read
+	cpi r24,56
+	brge read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	mov r24,temp
+	subi r24,48
+	mov digit1,r24
+
+	ldi result,1
+	cpi digit1,0
+	breq output
+more:
+	lsl result
+	dec digit1
+	brne more
+output:
+	out PORTA,result
+	ldi r24 ,low(100) 
+	ldi r25 ,high(100) 
+	rcall wait_msec
+
+	
+
+	rjmp read
+
+over:
+	ldi result,1
+	ldi r24 ,low(100) 
+	ldi r25 ,high(100) 
+	out PORTA,result
+ret
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+------------------------------------------------------------------
+10ii)
+/*
+ * avr4_1.asm
+ *
+ *  Created: 9/1/2015 6:57:08 ??
+ *   Author: KOSTAS
+ */ 
+
+ .include "m16def.inc"
+ .dseg
+_tmp_: .byte 2
+.def temp = r16
+.def digit1 = r17
+.def digit2 = r18
+.def temp1 =r19
+
+.cseg
+ldi temp, low(RAMEND)
+out SPL, temp
+ldi temp, high(RAMEND)
+out SPH, temp
+ldi temp,0b11111100
+out DDRD,temp
+ldi temp,0b11110000
+out DDRC,temp
+ser temp
+out DDRA,temp
+rcall lcd_init    ; initialize screen
+
+read:
+	ldi r24,20
+	rcall scan_keypad_rising_edge
+	rcall keypad_to_ascii
+	cpi r24,0
+	breq read
+	mov temp,r24
+	ldi r24,1
+	rcall lcd_command
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec
+	mov r24,temp
+	cpi r24,'A'
+	brlo digit
+	subi r24,55
+	rjmp next
+digit:
+	subi r24,48
+next:
+	mov digit1,r24
+	
+	cpi digit1,0
+	brlo read 		;invalid
+	cpi digit1,6
+	brlo lsb2
+	cpi digit1,10
+	brlo bit_4_5
+	cpi digit1,10
+	brge msb2
+
+lsb2:
+	ldi temp,0b00000011
+	rjmp output
+bit_4_5:
+	ldi temp,0b00110000
+	rjmp output
+msb2:
+	ldi temp,0b11000000
+
+output:
+	out PORTA,temp
+	rjmp read
+	
+
+
+lcd_init: 
+	ldi r24 ,40 
+	ldi r25 ,0 
+	rcall wait_msec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x30 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x20 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	ldi r24 ,39 
+	ldi r25 ,0 
+	rcall wait_usec 
+	ldi r24 ,0x28
+	rcall lcd_command
+	ldi r24 ,0x0c  
+	rcall lcd_command 
+	ldi r24 ,0x01  
+	rcall lcd_command 
+	ldi r24 ,low(1530) 
+	ldi r25 ,high(1530) 
+	rcall wait_usec 
+	ldi r24 ,0x06 
+	rcall lcd_command  
+ret
+
+lcd_data: 
+	sbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,43 
+	ldi r25 ,0 
+	rcall wait_usec 
+ret
+
+lcd_command: 
+	cbi PORTD ,PD2 
+	rcall write_2_nibbles 
+	ldi r24 ,39
+	ldi r25 ,0 
+	rcall wait_usec
+ret
+
+
+write_2_nibbles: 
+	push r24 
+	in r25 ,PIND 
+	andi r25 ,0x0f 
+	andi r24 ,0xf0 
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+	pop r24 
+	swap r24 
+	andi r24 ,0xf0
+	add r24 ,r25 
+	out PORTD ,r24 
+	sbi PORTD ,PD3 
+	cbi PORTD ,PD3 
+ret
+
+
+scan_row:
+ldi r25 ,0x08 
+back_: 
+lsl r25 
+dec r24 ; 
+brne back_
+out PORTC ,r25 
+nop
+nop 
+in r24 ,PINC 
+andi r24 ,0x0f 
+ret 
+
+
+scan_keypad:
+ldi r24 ,0x01 
+rcall scan_row
+swap r24 
+mov r27 ,r24 
+ldi r24 ,0x02 
+rcall scan_row
+add r27 ,r24 
+ldi r24 ,0x03 
+rcall scan_row
+swap r24 
+mov r26 ,r24 
+ldi r24 ,0x04 
+rcall scan_row
+add r26 ,r24 
+movw r24 ,r26 
+ret
+
+
+scan_keypad_rising_edge:
+mov r22 ,r24 
+rcall scan_keypad 
+push r24 
+push r25
+mov r24 ,r22 
+ldi r25 ,0 
+rcall wait_msec
+rcall scan_keypad 
+pop r23 
+pop r22 
+and r24 ,r22
+and r25 ,r23
+ldi r26 ,low(_tmp_) 
+ldi r27 ,high(_tmp_) 
+ld r23 ,X+
+ld r22 ,X
+st X ,r24 
+st -X ,r25 
+com r23
+com r22 
+and r24 ,r22
+and r25 ,r23
+ret
+
+keypad_to_ascii: 
+movw r26 ,r24 
+ldi r24 ,'*'
+sbrc r26 ,0
+ret
+ldi r24 ,'0'
+sbrc r26 ,1
+ret
+ldi r24 ,'#'
+sbrc r26 ,2
+ret
+ldi r24 ,'D'
+sbrc r26 ,3 
+ret 
+ldi r24 ,'7'
+sbrc r26 ,4
+ret
+ldi r24 ,'8'
+sbrc r26 ,5
+ret
+ldi r24 ,'9'
+sbrc r26 ,6
+ret
+ldi r24 ,'C'
+sbrc r26 ,7
+ret
+ldi r24 ,'4' 
+sbrc r27 ,0 
+ret
+ldi r24 ,'5'
+sbrc r27 ,1
+ret
+ldi r24 ,'6'
+sbrc r27 ,2
+ret
+ldi r24 ,'B'
+sbrc r27 ,3
+ret
+ldi r24 ,'1'
+sbrc r27 ,4
+ret
+ldi r24 ,'2'
+sbrc r27 ,5
+ret
+ldi r24 ,'3'
+sbrc r27 ,6
+ret
+ldi r24 ,'A'
+sbrc r27 ,7
+ret
+clr r24
+ret
+
+wait_usec:            /* waiting routines */
+	sbiw r24,1
+	nop
+	nop
+	nop
+	nop
+	brne wait_usec
+	ret
+
+wait_msec:
+	push r24
+	push r25
+	ldi r24,low(998)
+	ldi r25,high(998)
+	rcall wait_usec
+	pop r25
+	pop r24
+	sbiw r24,1
+	brne wait_msec
+	ret
+
+------------------------------------------------------------------
+11i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def checker =r18
+.def result =r19
+.def previous = r20
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRC,reg
+
+start:
+	ldi result,0
+	ldi checker,0b10000000
+	in reg,PINA
+next_dig:
+	mov temp,reg
+	and temp,checker
+	cpi temp,0
+	brne found_it
+	lsr checker
+	cpi checker,0
+	breq output
+	rjmp next_dig
+
+found_it:
+	lsl checker
+	cpi checker,0
+	breq output
+found_it1:
+	or result,checker
+	lsl checker
+	cpi checker,0
+	brne found_it1
+
+output:
+	out PORTC,result
+	rjmp start
+
+------------------------------------------------------------------
+12i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def result= r18
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRB,reg
+	ldi reg,0b00000011
+	out DDRA,reg
+
+start:
+	ldi result,0x00
+	in reg,PINB
+	mov temp,reg
+	andi temp,0b00001111
+	cpi temp,0b00001100
+	breq Y0_on
+	cpi temp,0b00000011
+	breq Y0_on
+	rjmp Y1
+Y0_on:
+	ori result,0x01
+
+Y1:
+	mov temp,reg
+	andi temp,0b11110000
+	cpi temp,0b00110000
+	breq Y1_on
+	cpi temp,0b11000000
+	breq Y1_on
+	rjmp output
+Y1_on:
+	ori result,0b00000010
+
+output:
+	out PORTA,result
+	rjmp start
+------------------------------------------------------------------
+13i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+//.def checker =r18
+.def result =r19
+.def previous = r20
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRB,reg
+
+start:
+	ldi result,0
+	in reg,PINA
+	mov temp,reg
+	andi temp,0x03
+	cpi temp,0x03
+	brne y1
+	ori result,1
+
+y1:
+	mov temp,reg
+	andi temp,0b00001100
+	cpi temp,0b00001100
+	brne y2
+	ori result,2
+
+y2:
+	mov temp,reg
+	andi temp,0b00110000
+	cpi temp,0b00000000
+	breq y3
+	ori result,4
+
+y3:
+	mov temp,reg
+	andi temp,0b11000000
+	cpi temp,0b00000000
+	breq output
+	ori result,8
+
+output:
+	out PORTB,result
+	rjmp start
+------------------------------------------------------------------
+14i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+//.def checker =r18
+.def result =r19
+.def previous = r20
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRB,reg
+	ser reg
+	out DDRA,reg
+
+start:
+	ldi temp,8
+	ldi result,0
+	ldi previous,1
+	in reg,PINB
+next:
+	and previous,reg
+	or result,previous
+	lsl previous
+	dec temp
+	cpi temp,0
+	brne next
+
+	out PORTA,result
+	rjmp start
+------------------------------------------------------------------
+15i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def digits =r18
+.def x1 =r19
+.def x2 = r20
+.def result =r21
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	clr reg
+	out DDRB,reg
+	ser reg
+	out DDRC,reg
+
+start:
+	ldi temp,0
+	ldi digits,8
+	in reg,PINA
+next:
+	clc
+	ror reg
+	brcs no_add
+	inc temp
+no_add:
+	dec digits
+	brne next
+
+	in reg,PINB
+	ldi digits,8
+next1:
+	clc
+	ror reg
+	brcs no_add1
+	inc temp
+no_add1:
+	dec digits
+	brne next1
+
+	mov reg,temp
+	clr temp
+dek:
+	cpi reg,10
+	brlo mon
+	inc temp
+	subi reg,10
+	rjmp dek
+mon:
+	lsl temp
+	lsl temp
+	lsl temp
+	lsl temp
+	or reg,temp
+
+	out PORTC,reg
+	rjmp start
+
+------------------------------------------------------------------
+16i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def checker =r18
+.def result =r19
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRD,reg
+
+start:
+	ldi result,0
+	ldi checker,0b10000000
+	in reg,PINA
+next_dig:
+	mov temp,reg
+	and temp,checker
+	cpi temp,0
+	brne found_it
+	lsr checker
+	cpi checker,0
+	breq output
+	rjmp next_dig
+
+found_it:
+	or result,checker
+	lsl checker
+	cpi checker,0
+	brne found_it
+
+output:
+	out PORTD,result
+	rjmp start
+------------------------------------------------------------------
+17i)
+/*
+ * project.asm
+ *
+ *  Created: 22/9/2015 12:24:41 ??
+ *   Author: George
+ */ 
+.include "m16def.inc"
+.org 0x00
+.def reg= r16
+.def temp= r17
+.def phase= r18
+.def counter =r19
+    ldi reg,LOW(RAMEND)
+	out SPL,reg
+	ldi reg,HIGH(RAMEND)
+	out SPH,reg
+	clr reg
+	out DDRA,reg
+	ser reg
+	out DDRD,reg
+
+	in reg,PINA
+	andi reg,0b01000000
+	sbrc reg,6
+	ldi phase,1
+	ldi phase,0
+start:
+	in reg,PINA
+	mov temp,reg
+	andi temp,0b10000000
+	cpi temp,0
+	breq counter1
+	ldi counter,1
+	out PORTD,counter
+	rjmp start
+counter1:
+	mov temp,reg
+	andi temp,0b01000000
+	cpi temp,0
+	brne adding
+	ldi phase,0
+	rjmp start
+adding:
+	cpi counter,0
+	breq start
+	cpi phase,0
+	brne start
+	ldi phase,1
+	inc counter
+	out PORTD,counter
+	rjmp start
+------------------------------------------------------------------
+
+------------------------------------------------------------------
+
+------------------------------------------------------------------
+
